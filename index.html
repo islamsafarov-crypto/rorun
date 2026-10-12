@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>RORUN</title>
 <meta name="description" content="ILI run log — record launch, receive and pigging data for pipeline inspection runs.">
-<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIlJPUlVOIiwgInNob3J0X25hbWUiOiAiUk9SVU4iLCAiZGVzY3JpcHRpb24iOiAiSUxJIHJ1biBsb2cg4oCUIHJlY29yZCBsYXVuY2gsIHJlY2VpdmUgYW5kIHBpZ2dpbmcgZGF0YSBmb3IgcGlwZWxpbmUgaW5zcGVjdGlvbiBydW5zLiIsICJzdGFydF91cmwiOiAiLiIsICJzY29wZSI6ICIuIiwgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNlZWYxZjMiLCAidGhlbWVfY29sb3IiOiAiIzBlNWE3OCIsICJpY29ucyI6IFt7InNyYyI6ICIvX2Jsb2IvZWFjOThiMDg2NzQxY2EwNjM0Zjc1YmJiMjJjNzAyYjIiLCAic2l6ZXMiOiAiMTkyeDE5MiIsICJ0eXBlIjogImltYWdlL3BuZyIsICJwdXJwb3NlIjogImFueSJ9LCB7InNyYyI6ICIvX2Jsb2IvZmY5MTBiODBkYTdlNThmYTBhMDcxNTM3YzhlMTkwZjEiLCAic2l6ZXMiOiAiNTEyeDUxMiIsICJ0eXBlIjogImltYWdlL3BuZyIsICJwdXJwb3NlIjogImFueSJ9XX0=">
+<link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#144f9b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="RORUN">
-<link rel="apple-touch-icon" href="/_blob/e897df183b99e96a9047c5b32c0ce36f">
-<link rel="icon" href="/_blob/eac98b086741ca0634f75bbb22c702b2">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#eef1f3;--card:#fff;--ink:#1b2a33;--mute:#64757f;--line:#d3dbe0;--acc:#1395d9;--acc-ink:#fff;--head:#375578;--brand:#144f9b;--warm:#c98a00;--ok:#1f7a4d;--no:#a83a32;
@@ -129,9 +129,9 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <div class="home-grid">
  <button type="button" class="home-card" id="home-new"><span class="home-ic">＋</span><span class="home-label">New Run</span></button>
  <button type="button" class="home-card" id="home-list"><span class="home-ic">☰</span><span class="home-label">Runs</span><span class="home-count" id="cnt-home">0</span></button>
- <button type="button" class="home-card" id="home-photos"><img class="home-ic-img" src="/_blob/3506e1c1ccb20a53db03ff9f9f1d3390" alt=""><span class="home-label">Photos</span></button>
+ <button type="button" class="home-card" id="home-photos"><img class="home-ic-img" src="photos-icon.png" alt=""><span class="home-label">Photos</span></button>
 </div>
-<img class="home-logo" src="/_blob/4599f1737dcee14e1686e8c3cc87c8de" alt="ROSEN">
+<img class="home-logo" src="rosen-logo.png" alt="ROSEN">
 </section>
 <section id="v-new" hidden><form id="form" onsubmit="return false"></form></section>
 <section id="v-photos" hidden>
@@ -152,7 +152,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <div class="bar">
  <select id="qf" class="qf"></select>
  <input class="q" id="q" type="search" placeholder="Search…">
- <button class="ghost" id="emailxl">Email Excel report</button>
+ <button class="ghost" id="emailxl">Export to Excel</button>
 </div>
 <div id="list"></div>
 </section>
@@ -181,8 +181,30 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
  <img id="photo-view-img" src="">
  <button type="button" id="photo-view-close">Close</button>
 </div>
+
+<!-- Firebase (compat SDK — mirrors the collection/doc/onSnapshot API this app already uses) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<!-- SheetJS — used only for the client-side "Export to Excel" button -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script>
-const SHARE_URL="https://claude.ai/artifact/DWjjWmS1Gq7ruE8wKQSeFV";
+if("serviceWorker" in navigator){
+ window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
+}
+
+const firebaseConfig={
+ apiKey:"AIzaSyA0ldmcFtzAGTF1Ms_YE7fQtUHbJRpJEbA",
+ authDomain:"rorun-32349.firebaseapp.com",
+ projectId:"rorun-32349",
+ storageBucket:"rorun-32349.firebasestorage.app",
+ messagingSenderId:"364232477588",
+ appId:"1:364232477588:web:3b737a0b54a2aeedf59d81"
+};
+
+const SHARE_URL="https://islamsafarov-crypto.github.io/rorun/";
 const VALID={
  project:{re:/^\d-\d{4}-\d{5}$/,hint:"Just type the 10 digits — hyphens are added automatically (e.g. 0-0000-00000)",ex:"0-0000-00000"},
  line:{re:/^\d{2}[A-Z0-9]{6}$/,hint:"Format: 00ABCDEF (2 digits + 6 letters/digits)",ex:"00ABCDEF"},
@@ -196,7 +218,7 @@ const G=[
 ["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["off","Switched off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
 ["Summary",[["dist","Recorded distance","num","m"],["data","Data","dnum",["GB","MB"]],["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
 const F=G.flatMap(g=>g[1]);
-let runs=[],editId=null,cloudDb=null,assetsApi=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false;
+let runs=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false;
 const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
@@ -207,20 +229,40 @@ function setStatus(mode){
  s.className="status "+mode;
  s.innerHTML="<span class='dot'></span>"+(mode==="cloud"?"Synced — shared with your team":mode==="local"?"Offline — saved on this device only":"Connecting…");
 }
+function makeAssetsApi(){
+ return{
+  upload:async function(blob){
+   const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
+   const path="photos/"+id+".jpg";
+   const ref=storageRef.child(path);
+   await ref.put(blob,{contentType:"image/jpeg"});
+   const url=await ref.getDownloadURL();
+   return{id:path,url:url};
+  },
+  delete:async function(path){
+   try{await storageRef.child(path).delete()}catch(e){}
+  }
+ };
+}
 async function initCloud(){
- try{assetsApi=window.claude?await window.claude.use("assets"):null}catch(e){assetsApi=null}
+ try{
+  firebase.initializeApp(firebaseConfig);
+  try{await firebase.firestore().enablePersistence({synchronizeTabs:true})}catch(e){}
+  await firebase.auth().signInAnonymously();
+  cloudDb=firebase.firestore();
+  storageRef=firebase.storage().ref();
+  assetsApi=makeAssetsApi();
+ }catch(e){cloudDb=null;assetsApi=null}
  $("pl-add").hidden=!assetsApi;
- let db=null;
- try{db=window.claude?await window.claude.use("db"):null}catch(e){db=null}
- if(!db){setStatus("local");return}
- cloudDb=db;setStatus("cloud");
- db.collection("runs").orderBy("ts","desc").limit(500).onSnapshot(snap=>{
+ if(!cloudDb){setStatus("local");return}
+ setStatus("cloud");
+ cloudDb.collection("runs").orderBy("ts","desc").limit(500).onSnapshot(snap=>{
   runs=snap.docs.map(d=>d.data());
   cacheLocal();updateCount();
   if(!$("v-list").hidden)renderList();
   if(!$("v-photos").hidden)renderPhotoLines();
  },err=>{toast("Sync interrupted — showing last known data")});
- db.collection("photos").orderBy("uploadedAt","desc").limit(1000).onSnapshot(snap=>{
+ cloudDb.collection("photos").orderBy("uploadedAt","desc").limit(1000).onSnapshot(snap=>{
   photos=snap.docs.map(d=>d.data());
   cleanupOldPhotos();
   if(!$("v-photos").hidden)renderPhotoLines();
@@ -266,7 +308,7 @@ function renderPhotoLine(line){
  $("pl-sections").innerHTML=KINDS.map(([k,label])=>{
   const items=mine.filter(p=>p.kind===k).sort((a,b)=>b.uploadedAt-a.uploadedAt);
   return "<div class='kind-section'><div class='kind-section-title'>"+label+" ("+items.length+")</div><div class='photo-grid' data-k='"+k+"'>"+
-   items.map(p=>"<div class='photo-thumb' data-url='/_blob/"+p.assetId+"' style=\"background-image:url('/_blob/"+p.assetId+"')\"><span class='photo-del' data-id='"+p.id+"'>×</span></div>").join("")+
+   items.map(p=>"<div class='photo-thumb' data-url='"+esc(p.url||"")+"' style=\"background-image:url('"+esc(p.url||"")+"')\"><span class='photo-del' data-id='"+p.id+"'>×</span></div>").join("")+
    "</div></div>";
  }).join("");
 }
@@ -288,7 +330,7 @@ async function blobSha256(blob){
  return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
 async function addPhotosForLine(line,kind,files){
- if(!assetsApi||!cloudDb){toast("Photo storage unavailable");return}
+ if(!assetsApi||!cloudDb){toast("Photo storage unavailable — check your connection");return}
  const list=Array.from(files||[]);
  if(!list.length)return;
  toast("Uploading "+list.length+" photo"+(list.length>1?"s":"")+"…");
@@ -301,7 +343,7 @@ async function addPhotosForLine(line,kind,files){
    if(hash&&seen.has(hash)){dupCount++;continue}
    const res=await assetsApi.upload(blob);
    const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
-   const doc={id,assetId:res.id,line,kind,uploadedAt:Date.now(),hash:hash||null};
+   const doc={id,assetId:res.id,url:res.url,line,kind,uploadedAt:Date.now(),hash:hash||null};
    await cloudDb.collection("photos").doc(id).set(doc);
    photos.unshift(doc);
    if(hash)seen.add(hash);
@@ -738,17 +780,43 @@ $("list").onclick=e=>{
  const it=e.target.closest(".item");if(!it)return;
  const r=runs.find(x=>x.id===it.dataset.id);if(!r)return;
  editId=r.id;fill(r);$("save").textContent="Save Changes";$("delete").hidden=false;show("new")};
-$("emailxl").onclick=async()=>{
- if(!cloudDb){toast("Cloud sync required to email a report");return}
+const XLSX_COLUMNS=[
+ ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
+ ["Technology","equip","text"],["Employee","operator","text"],["Expected velocity (m/s)","expspeed","number"],
+ ["Switched on","on","text"],["Transmitter","tx","yn"],["BM L","bml","yn"],["BM Distance launch (m)","bmdist_bl","number"],
+ ["Launcher Picture","lpic","yn"],["Tool Pictures Pre-run","toolpic_bl","yn"],["Pressure launcher (bar)","pl","number"],
+ ["Launched","launched","text"],["Date launch","date_on","text"],["BM R","bmr","yn"],["BM Distance run (m)","bmdist_run","number"],
+ ["Received","received","text"],["Date receive","date_off","text"],["Pressure receiver (bar)","pr","number"],
+ ["Switched off","off","text"],["Receiver Picture","rpic","yn"],["Tool Pictures Post-run","toolpic_run","yn"],
+ ["Recorded distance (m)","dist","number"],["Data","data","data"],["Notes","notes","text"],["Complete","complete","yn"]
+];
+function exportXlsx(){
  if(!runs.length){toast("No runs to export yet");return}
- const btn=$("emailxl");btn.disabled=true;const old=btn.textContent;btn.textContent="Requesting…";
- try{
-  const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
-  await cloudDb.collection("xlsx_requests").doc(id).set({id,status:"pending",requestedAt:Date.now()});
-  toast("Requested — within the hour a Gmail draft with the report will be waiting for you to send");
- }catch(e){toast("Could not send the request — try again later")}
- btn.disabled=false;btn.textContent=old;
-};
+ const header=XLSX_COLUMNS.map(c=>c[0]).concat(["Run duration","Average velocity (m/s)","Above expected velocity?"]);
+ const rows=runs.map(r=>{
+  const row=XLSX_COLUMNS.map(([label,key,kind])=>{
+   if(kind==="number"){const n=parseNum(r[key]);return isFinite(n)?n:""}
+   if(kind==="yn")return r[key]==="y"?"Yes":r[key]==="n"?"No":"";
+   if(kind==="data")return r.data?(parseNum(r.data)||r.data)+" "+(r["data-unit"]||"GB"):"";
+   return r[key]||"";
+  });
+  const ms=durationMs(r);
+  row.push(ms===null?"":durationText(r));
+  const dist=parseNum(r.dist),exp=parseNum(r.expspeed);
+  let avg="";
+  if(ms!==null&&ms>0&&isFinite(dist)&&dist>0)avg=+((dist/(ms/1000)).toFixed(2));
+  row.push(avg);
+  row.push(speedOverExpected(r)?"Yes":"No");
+  return row;
+ });
+ const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+ ws["!cols"]=header.map(()=>({wch:16}));
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,ws,"Runs");
+ const stamp=new Date().toISOString().slice(0,10);
+ XLSX.writeFile(wb,"RORUN_export_"+stamp+".xlsx");
+}
+$("emailxl").onclick=exportXlsx;
 build();fill(lastDefaults());buildSearchFilter();updateCount();initCloud();show("home");
 </script>
 </body>
