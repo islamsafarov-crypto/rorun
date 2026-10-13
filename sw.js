@@ -1,4 +1,4 @@
-const CACHE = "rorun-shell-v1";
+const CACHE = "rorun-shell-v2";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -34,6 +34,27 @@ self.addEventListener("fetch", (e) => {
   // live data is never served stale.
   if (url.origin !== location.origin) return;
 
+  const isPage = e.request.mode === "navigate" || e.request.destination === "document";
+
+  if (isPage) {
+    // Network-first for the page itself, so a new deploy is picked up
+    // immediately whenever there's a connection. Falls back to the
+    // cached copy only when offline.
+    e.respondWith(
+      fetch(e.request)
+        .then((resp) => {
+          if (resp && resp.ok) {
+            const copy = resp.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
+          return resp;
+        })
+        .catch(() => caches.match(e.request).then((cached) => cached || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (icons, manifest) — these rarely change.
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const network = fetch(e.request)
@@ -45,7 +66,6 @@ self.addEventListener("fetch", (e) => {
           return resp;
         })
         .catch(() => cached);
-      // Cache-first for instant offline loads; refresh the cache in the background.
       return cached || network;
     })
   );
