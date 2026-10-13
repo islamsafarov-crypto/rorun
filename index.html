@@ -314,6 +314,13 @@ async function initCloud(){
  $("pl-add").hidden=!assetsApi;
  if(!cloudDb){setStatus("local");return}
  firebase.auth().onAuthStateChanged(user=>{
+  if(user&&user.isAnonymous){
+   // Leftover session from the old anonymous-login version — sign it out
+   // so the real login screen shows instead.
+   firebase.auth().signOut();
+   showLogin();
+   return;
+  }
   if(!user){
    currentUser=null;
    showLogin();
