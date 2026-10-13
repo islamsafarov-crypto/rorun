@@ -117,6 +117,14 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .status.cloud .dot{background:var(--ok)}
 .status.local .dot{background:var(--warm)}
 @media (prefers-reduced-motion:reduce){.msg{transition:none}}
+.login-back{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+.login-back[hidden]{display:none}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:26px 22px;box-sizing:border-box}
+.login-card h2{margin:0 0 4px;text-align:center;color:var(--brand);font-stretch:condensed}
+.login-card .sub{color:var(--mute);text-align:center;margin-bottom:20px;font-size:14px}
+.login-err{color:var(--no);font-size:13px;margin-top:8px;min-height:16px}
+.badge-lock{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:20px;background:var(--mute);color:#fff;font-size:11px;font-weight:600;vertical-align:middle}
+.item-body.readonly{cursor:default}
 </style>
 </head>
 <body>
@@ -131,6 +139,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
  <button type="button" class="home-card" id="home-list"><span class="home-ic">☰</span><span class="home-label">Runs</span><span class="home-count" id="cnt-home">0</span></button>
  <button type="button" class="home-card" id="home-photos"><img class="home-ic-img" src="photos-icon.png" alt=""><span class="home-label">Photos</span></button>
 </div>
+<div id="whoami" style="text-align:center;margin-top:14px;font-size:12px;color:var(--mute)"></div>
 <img class="home-logo" src="rosen-logo.png" alt="ROSEN">
 </section>
 <section id="v-new" hidden><form id="form" onsubmit="return false"></form></section>
@@ -181,6 +190,16 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
  <img id="photo-view-img" src="">
  <button type="button" id="photo-view-close">Close</button>
 </div>
+<div class="login-back" id="login-back" hidden>
+ <div class="login-card">
+  <h2>R<span class="brand-o"></span>RUN</h2>
+  <div class="sub">Sign in to continue</div>
+  <div class="f"><label for="login-email">Email</label><input type="email" id="login-email" autocomplete="username" autocapitalize="off"></div>
+  <div class="f"><label for="login-password">Password</label><input type="password" id="login-password" autocomplete="current-password"></div>
+  <div class="login-err" id="login-err"></div>
+  <button type="button" class="save" id="login-submit" style="margin-top:6px">Sign In</button>
+ </div>
+</div>
 
 <!-- Firebase (compat SDK — mirrors the collection/doc/onSnapshot API this app already uses) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -211,6 +230,8 @@ const VALID={
  rnum:{re:/^R\d{1,2}$/,hint:"Format: R + number, up to 3 characters (e.g. R1, R2, R12)",ex:"R1"}
 };
 const EMPLOYEES=["Islam Safarov","Dastan Ideyatov","Mukhamediyar Kinzhenov","Nurbulek Adilov"];
+// Islam Safarov's Firebase Auth UID — only this account gets admin override (edit/delete any run).
+const ADMIN_UID="LkVguLehDWYruVmzBdk929JgtW83";
 const EQUIPMENT=["RoGeo MD","RoGeo XT","RoCorr MFL-A","RoCorr UT","RoCorr MFL-C (AFD)","EMAT"];
 const G=[
 ["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected velocity","num","m/s"]]],
@@ -218,7 +239,7 @@ const G=[
 ["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["off","Switched off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
 ["Summary",[["dist","Recorded distance","num","m"],["data","Data","dnum",["GB","MB"]],["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
 const F=G.flatMap(g=>g[1]);
-let runs=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false;
+let runs=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false,currentUser=null,listenersAttached=false;
 const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
@@ -244,18 +265,71 @@ function makeAssetsApi(){
   }
  };
 }
+function isAdmin(){return !!currentUser&&currentUser.uid===ADMIN_UID}
+function canEdit(r){
+ if(!r)return false;
+ if(!cloudDb)return true; // offline/local-only mode — no login system active
+ if(isAdmin())return true;
+ if(!r.ownerUid)return false; // legacy / unowned runs — admin only
+ return !!currentUser&&r.ownerUid===currentUser.uid;
+}
+function showLogin(){
+ $("login-back").hidden=false;
+ $("main-nav").hidden=true;
+ $("v-home").hidden=true;$("v-new").hidden=true;$("v-list").hidden=true;$("v-photos").hidden=true;$("v-photo-line").hidden=true;
+ $("status").hidden=true;
+}
+function hideLogin(){
+ $("login-back").hidden=true;
+ $("login-email").value="";$("login-password").value="";$("login-err").textContent="";
+ $("status").hidden=false;
+ show("home");
+}
+async function doLogin(){
+ const email=$("login-email").value.trim();
+ const pass=$("login-password").value;
+ $("login-err").textContent="";
+ if(!email||!pass){$("login-err").textContent="Enter email and password";return}
+ $("login-submit").disabled=true;
+ try{
+  await firebase.auth().signInWithEmailAndPassword(email,pass);
+ }catch(e){
+  $("login-err").textContent="Sign-in failed — check your email and password";
+ }
+ $("login-submit").disabled=false;
+}
+$("login-submit").onclick=doLogin;
+$("login-password").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+$("login-email").addEventListener("keydown",e=>{if(e.key==="Enter")$("login-password").focus()});
+function doLogout(){firebase.auth().signOut()}
 async function initCloud(){
  try{
   firebase.initializeApp(firebaseConfig);
   try{await firebase.firestore().enablePersistence({synchronizeTabs:true})}catch(e){}
-  await firebase.auth().signInAnonymously();
+  await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
   cloudDb=firebase.firestore();
   storageRef=firebase.storage().ref();
   assetsApi=makeAssetsApi();
  }catch(e){cloudDb=null;assetsApi=null}
  $("pl-add").hidden=!assetsApi;
  if(!cloudDb){setStatus("local");return}
- setStatus("cloud");
+ firebase.auth().onAuthStateChanged(user=>{
+  if(!user){
+   currentUser=null;
+   showLogin();
+   return;
+  }
+  currentUser=user;
+  $("whoami").innerHTML="Signed in as "+esc(user.email)+(isAdmin()?" <span class='badge-ok'>Admin</span>":"")+" · <button type='button' id='logout-btn' style='border:none;background:none;color:var(--acc);text-decoration:underline;font:inherit;padding:0;cursor:pointer'>Sign out</button>";
+  $("logout-btn").onclick=doLogout;
+  hideLogin();
+  setStatus("cloud");
+  attachCloudListeners();
+ });
+}
+function attachCloudListeners(){
+ if(listenersAttached)return;
+ listenersAttached=true;
  cloudDb.collection("runs").orderBy("ts","desc").limit(500).onSnapshot(snap=>{
   runs=snap.docs.map(d=>d.data());
   cacheLocal();updateCount();
@@ -606,6 +680,10 @@ async function setCompleteNow(id,val){
  renderList();
 }
 async function submit(){
+ if(editId){
+  const existing=runs.find(x=>x.id===editId);
+  if(existing&&!canEdit(existing)){toast("You can only edit your own runs");return}
+ }
  const r=read();
  if(r.line){
   if(photos.some(p=>p.line===r.line&&p.kind==="launcher"))r.lpic="y";
@@ -615,8 +693,15 @@ async function submit(){
  if(!validateField("project")){toast("Project doesn't match the required format");$("f-project").focus();return}
  if(r.line&&!validateField("line")){toast("Line ID doesn't match the required format");$("f-line").focus();return}
  if(r.rnum&&!validateField("rnum")){toast("Run No. doesn't match the required format");$("f-rnum").focus();return}
- if(editId){const i=runs.findIndex(x=>x.id===editId);r.id=editId;r.ts=i>-1?runs[i].ts:Date.now()}
- else{r.id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);r.ts=Date.now()}
+ if(editId){
+  const i=runs.findIndex(x=>x.id===editId);
+  r.id=editId;r.ts=i>-1?runs[i].ts:Date.now();
+  r.ownerUid=i>-1?(runs[i].ownerUid||null):(currentUser?currentUser.uid:null);
+ }else{
+  r.id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
+  r.ts=Date.now();
+  r.ownerUid=currentUser?currentUser.uid:null;
+ }
  const i=runs.findIndex(x=>x.id===r.id);
  if(i>-1)runs[i]=r;else runs.unshift(r);
  cacheLocal();updateCount();
@@ -632,6 +717,8 @@ let pendingDeleteId=null;
 function confirmDeleteRun(id){pendingDeleteId=id;$("del-back").hidden=false}
 function closeDel(){$("del-back").hidden=true;pendingDeleteId=null}
 async function deleteRunById(id){
+ const existing=runs.find(x=>x.id===id);
+ if(existing&&!canEdit(existing)){toast("You can only delete your own runs");return}
  runs=runs.filter(r=>r.id!==id);
  cacheLocal();updateCount();
  if(cloudDb){
@@ -691,7 +778,8 @@ function renderList(){
  const L=$("list");
  if(!res.length){L.innerHTML="<div class='empty'>"+(runs.length?"No matches found":"No runs yet. Add your first one on the New Run tab.")+"</div>";return}
  L.innerHTML=res.map(r=>{const dr=r.date_on?esc(r.date_on)+(r.date_off&&r.date_off!==r.date_on?" – "+esc(r.date_off):""):"";
-  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+"' data-id='"+r.id+"'>"+(r.line?"<button type='button' class='item-photo-btn' data-line='"+esc(r.line)+"' aria-label='Photos for this line'>📷</button>":"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small></div></div>"}).join("")}
+  const editable=canEdit(r);
+  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?"<button type='button' class='item-photo-btn' data-line='"+esc(r.line)+"' aria-label='Photos for this line'>📷</button>":"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small></div></div>"}).join("")}
 function esc(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function shareText(){
  const r=read();
@@ -740,6 +828,7 @@ let swipeState=null,lastDragEnd=0;
 function closeOpenItems(except){document.querySelectorAll(".item-body.open").forEach(b=>{if(b!==except){b.style.transform="";b.classList.remove("open")}})}
 $("list").addEventListener("touchstart",e=>{
  const body=e.target.closest(".item-body");if(!body)return;
+ if(body.classList.contains("readonly"))return;
  closeOpenItems(body);
  const t=e.touches[0];
  swipeState={body,startX:t.clientX,startY:t.clientY,dx:body.classList.contains("open")?-84:0,dragging:false};
@@ -772,13 +861,17 @@ $("list").addEventListener("touchend",()=>{
 $("list").onclick=e=>{
  if(Date.now()-lastDragEnd<300)return;
  const delBtn=e.target.closest(".item-del");
- if(delBtn){confirmDeleteRun(delBtn.dataset.id);return}
+ if(delBtn){
+  const dr=runs.find(x=>x.id===delBtn.dataset.id);
+  if(dr&&!canEdit(dr)){toast("You can only edit your own runs");return}
+  confirmDeleteRun(delBtn.dataset.id);return}
  const photoBtn=e.target.closest(".item-photo-btn");
  if(photoBtn){openPhotoLine(photoBtn.dataset.line);return}
  const body=e.target.closest(".item-body");if(!body)return;
  if(body.classList.contains("open")){body.style.transform="";body.classList.remove("open");return}
  const it=e.target.closest(".item");if(!it)return;
  const r=runs.find(x=>x.id===it.dataset.id);if(!r)return;
+ if(!canEdit(r)){toast("You can only edit your own runs");return}
  editId=r.id;fill(r);$("save").textContent="Save Changes";$("delete").hidden=false;show("new")};
 const XLSX_COLUMNS=[
  ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
