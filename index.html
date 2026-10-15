@@ -125,6 +125,9 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .login-err{color:var(--no);font-size:13px;margin-top:8px;min-height:16px}
 .badge-lock{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:20px;background:var(--mute);color:#fff;font-size:11px;font-weight:600;vertical-align:middle}
 .item-body.readonly{cursor:default}
+.readonly-banner{background:var(--warm);color:#1b2a33;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-weight:600;font-size:14px;text-align:center}
+.readonly-banner[hidden]{display:none}
+.readonly-form .yn button,.readonly-form .ut button,.readonly-form #complete,.readonly-form input,.readonly-form select,.readonly-form textarea,.readonly-form .now{pointer-events:none;opacity:.75}
 </style>
 </head>
 <body>
@@ -135,14 +138,14 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <div class="home-title">R<span class="brand-o"></span>RUN</div>
 <div class="home-sub">ILI run log</div>
 <div class="home-grid">
- <button type="button" class="home-card" id="home-new"><span class="home-ic">＋</span><span class="home-label">New Run</span></button>
- <button type="button" class="home-card" id="home-list"><span class="home-ic">☰</span><span class="home-label">Runs</span><span class="home-count" id="cnt-home">0</span></button>
+ <button type="button" class="home-card" id="home-ili"><span class="home-ic">📋</span><span class="home-label">ILI Runs</span><span class="home-count" id="cnt-ili">0</span></button>
+ <button type="button" class="home-card" id="home-clp"><span class="home-ic">🧹</span><span class="home-label">CLP/GP Runs</span><span class="home-count" id="cnt-clp">0</span></button>
  <button type="button" class="home-card" id="home-photos"><img class="home-ic-img" src="photos-icon.png" alt=""><span class="home-label">Photos</span></button>
 </div>
 <div id="whoami" style="text-align:center;margin-top:14px;font-size:12px;color:var(--mute)"></div>
 <img class="home-logo" src="rosen-logo.png" alt="ROSEN">
 </section>
-<section id="v-new" hidden><form id="form" onsubmit="return false"></form></section>
+<section id="v-new" hidden><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
 <section id="v-photos" hidden>
 <div class="bar">
  <input class="q" id="pq" type="search" placeholder="Search Line ID…">
@@ -233,18 +236,35 @@ const EMPLOYEES=["Islam Safarov","Dastan Ideyatov","Mukhamediyar Kinzhenov","Nur
 // Islam Safarov's Firebase Auth UID — only this account gets admin override (edit/delete any run).
 const ADMIN_UID="QrMEsZfztOaxHhDQnDhK5g6g8wF3";
 const EQUIPMENT=["RoGeo MD","RoGeo XT","RoCorr MFL-A","RoCorr UT","RoCorr MFL-C (AFD)","EMAT"];
-const G=[
-["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected velocity","num","m/s"]]],
+const CLP_TECH=["CLP","GP","HD","FOAM"];
+const ILI_G=[
+["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected velocity","num","m/s"],["cdist","Client Info Distance","num","m"]]],
 ["Before Launch",[["on","Switched on","time"],["tx","Transmitter","yn"],["bml","BM L","yn"],["bmdist_bl","BM Distance","num","m"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-run)","yn"],["pl","Pressure launcher","num","bar"]]],
 ["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["off","Switched off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
-["Summary",[["dist","Recorded distance","num","m"],["data","Data","dnum",["GB","MB"]],["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
-const F=G.flatMap(g=>g[1]);
-let runs=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false,currentUser=null,listenersAttached=false;
+["Summary",[["dist","Recorded distance","num","m"],["distdiff","Distance Difference","calc"],["data","Data","dnum",["GB","MB"]],["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
+const CLP_G=[
+["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["operator","Employee","sel",EMPLOYEES],["cdist","Client Info Distance","num","m"]]],
+["Before Launch",[["tx","Transmitter","yn"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-run)","yn"],["pl","Pressure launcher","num","bar"]]],
+["Run",[["launched","Launched","time"],["date_on","Date","date"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
+["Summary",[["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
+let G=ILI_G,F=ILI_G.flatMap(g=>g[1]);
+let activeType="ili",formReadonly=false;
+let runs=[],clpRuns=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false,currentUser=null,listenersAttached=false;
 const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
+try{clpRuns=JSON.parse(localStorage.getItem("clpRuns")||"[]")}catch(e){clpRuns=[]}
 const $=id=>document.getElementById(id);
-function cacheLocal(){try{localStorage.setItem("runs",JSON.stringify(runs))}catch(e){}}
+function activeRunsArr(){return activeType==="clp"?clpRuns:runs}
+function activeCollName(){return activeType==="clp"?"clpRuns":"runs"}
+function setActiveRunsArr(newArr){if(activeType==="clp")clpRuns=newArr;else runs=newArr}
+function setActiveSchema(type){activeType=type;G=type==="clp"?CLP_G:ILI_G;F=G.flatMap(g=>g[1])}
+function cacheLocal(type){
+ try{
+  if(type==="clp")localStorage.setItem("clpRuns",JSON.stringify(clpRuns));
+  else localStorage.setItem("runs",JSON.stringify(runs));
+ }catch(e){}
+}
 function setStatus(mode){
  const s=$("status");if(!s)return;
  s.className="status "+mode;
@@ -339,8 +359,14 @@ function attachCloudListeners(){
  listenersAttached=true;
  cloudDb.collection("runs").orderBy("ts","desc").limit(500).onSnapshot(snap=>{
   runs=snap.docs.map(d=>d.data());
-  cacheLocal();updateCount();
-  if(!$("v-list").hidden)renderList();
+  cacheLocal("ili");updateCounts();
+  if(!$("v-list").hidden&&activeType==="ili")renderList();
+  if(!$("v-photos").hidden)renderPhotoLines();
+ },err=>{toast("Sync interrupted — showing last known data")});
+ cloudDb.collection("clpRuns").orderBy("ts","desc").limit(500).onSnapshot(snap=>{
+  clpRuns=snap.docs.map(d=>d.data());
+  cacheLocal("clp");updateCounts();
+  if(!$("v-list").hidden&&activeType==="clp")renderList();
   if(!$("v-photos").hidden)renderPhotoLines();
  },err=>{toast("Sync interrupted — showing last known data")});
  cloudDb.collection("photos").orderBy("uploadedAt","desc").limit(1000).onSnapshot(snap=>{
@@ -363,6 +389,7 @@ async function cleanupOldPhotos(){
 function allLines(){
  const set=new Set();
  runs.forEach(r=>{if(r.line)set.add(r.line)});
+ clpRuns.forEach(r=>{if(r.line)set.add(r.line)});
  photos.forEach(p=>{if(p.line)set.add(p.line)});
  return Array.from(set).sort();
 }
@@ -449,28 +476,32 @@ function syncPicFromLine(line){
 async function markPictureTaken(line,kind){
  const field=KIND_TO_FIELD[kind];
  if(!field||!line)return;
+ await markInArr(runs,"runs","ili",line,field);
+ await markInArr(clpRuns,"clpRuns","clp",line,field);
+}
+async function markInArr(arr,collName,type,line,field){
  let i=-1;
- if(editId){
-  const ei=runs.findIndex(x=>x.id===editId);
-  if(ei>-1&&runs[ei].line===line)i=ei;
+ if(editId&&activeType===type){
+  const ei=arr.findIndex(x=>x.id===editId);
+  if(ei>-1&&arr[ei].line===line)i=ei;
  }
  if(i===-1){
-  i=runs.reduce((best,r,idx)=>{
+  i=arr.reduce((best,r,idx)=>{
    if(r.line!==line)return best;
    if(best===-1)return idx;
-   return (r.ts||0)>(runs[best].ts||0)?idx:best;
+   return (r.ts||0)>(arr[best].ts||0)?idx:best;
   },-1);
  }
  if(i===-1)return;
- if(runs[i][field]==="y")return;
- const id=runs[i].id;
- runs[i]=Object.assign({},runs[i],{[field]:"y"});
- cacheLocal();
+ if(arr[i][field]==="y")return;
+ const id=arr[i].id;
+ arr[i]=Object.assign({},arr[i],{[field]:"y"});
+ cacheLocal(type);
  if(cloudDb){
-  try{await cloudDb.collection("runs").doc(id).set(runs[i])}
+  try{await cloudDb.collection(collName).doc(id).set(arr[i])}
   catch(e){}
  }
- if(!$("v-new").hidden&&editId===id){
+ if(!$("v-new").hidden&&editId===id&&activeType===type){
   document.querySelectorAll("[data-k='"+field+"'] button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v==="y")));
  }
  renderList();
@@ -510,25 +541,42 @@ function parseNum(s){
 }
 function avgSpeedText(r){
  const ms=durationMs(r);
- const dist=parseNum(r.dist);
+ const distKey=activeType==="clp"?"cdist":"dist";
+ const dist=parseNum(r[distKey]);
  if(ms===null||ms<=0||!isFinite(dist)||dist<=0)return "—";
  const mps=dist/(ms/1000);
  return mps.toFixed(2)+" m/s";
 }
+function distDiffText(r){
+ const dist=parseNum(r.dist),cdist=parseNum(r.cdist);
+ if(!isFinite(dist)||!isFinite(cdist))return "—";
+ const diff=dist-cdist;
+ return (diff>0?"+":"")+Math.round(diff)+" m";
+}
+function distShort(r){
+ const dist=parseNum(r.dist),cdist=parseNum(r.cdist);
+ if(!isFinite(dist)||!isFinite(cdist))return false;
+ return dist<cdist;
+}
 function calcText(k,r){
  if(k==="duration")return durationText(r);
  if(k==="avgspeed")return avgSpeedText(r);
+ if(k==="distdiff")return distDiffText(r);
  return "—";
 }
 function speedOverExpected(r){
+ if(activeType==="clp")return false;
  const ms=durationMs(r);const dist=parseNum(r.dist);const exp=parseNum(r.expspeed);
  if(ms===null||ms<=0||!isFinite(dist)||dist<=0||!isFinite(exp)||exp<=0)return false;
- return (dist/(ms/1000))>exp;
+ const mps=+(dist/(ms/1000)).toFixed(2);
+ const expR=+exp.toFixed(2);
+ return mps>expR;
 }
 function setCalcField(k,r){
  const el=$("f-"+k);
  el.textContent=calcText(k,r);
  if(k==="avgspeed")el.classList.toggle("calc-warn",speedOverExpected(r));
+ if(k==="distdiff")el.classList.toggle("calc-warn",distShort(r));
 }
 function refreshCalcFields(){
  const r=read();
@@ -536,7 +584,7 @@ function refreshCalcFields(){
 }
 const SUGGEST_KEYS=["project","client","line"];
 function suggestValues(k){
- return [...new Set(runs.map(r=>r[k]).filter(Boolean))];
+ return [...new Set(activeRunsArr().map(r=>r[k]).filter(Boolean))];
 }
 function showSuggestions(k,query){
  const box=$("sg-"+k);if(!box)return;
@@ -550,11 +598,12 @@ function showSuggestions(k,query){
 function hideSuggestions(k){const box=$("sg-"+k);if(box){box.classList.remove("show");box.innerHTML=""}}
 function hideAllSuggestions(){SUGGEST_KEYS.forEach(hideSuggestions)}
 function lastDefaults(){
- if(!runs.length)return{};
- const last=runs[0];
+ const arr=activeRunsArr();
+ if(!arr.length)return{};
+ const last=arr[0];
  return{client:last.client||"",equip:last.equip||"",operator:last.operator||""};
 }
-const PAIR_ROWS=new Set(["line+rnum","tx+bml","lpic+toolpic_bl","bmr+bmdist_run","rpic+toolpic_run","dist+data","duration+avgspeed"]);
+const PAIR_ROWS=new Set(["line+rnum","tx+bml","lpic+toolpic_bl","bmr+bmdist_run","rpic+toolpic_run","dist+distdiff","duration+avgspeed"]);
 function fieldInner(k,l,t,u){
  let h="<label for='f-"+k+"'>"+l+"</label>";
  if(t==="yn")h+="<div class='yn' data-k='"+k+"'><button type='button' data-v='y'>Yes</button><button type='button' data-v='n'>No</button></div>";
@@ -593,7 +642,14 @@ function build(){
  const b=document.createElement("button");b.className="save";b.id="save";b.textContent="Save Run";f.appendChild(b);
  const sh=document.createElement("button");sh.type="button";sh.className="ghost share-btn";sh.id="share";sh.textContent="Share";f.appendChild(sh);
  const del=document.createElement("button");del.type="button";del.className="ghost danger-btn";del.id="delete";del.textContent="Delete Run";del.hidden=true;f.appendChild(del);
+ $("save").onclick=submit;
+ $("share").onclick=openShare;
+ $("delete").onclick=()=>{if(editId)confirmDeleteRun(editId)};
+}
+function initFormListeners(){
+ const f=$("form");
  f.addEventListener("click",e=>{
+  if(formReadonly)return;
   const n=e.target.closest("[data-now]");if(n){$("f-"+n.dataset.now).value=nowT();
    if(n.dataset.now==="launched")$("f-date_on").value=today();
    if(n.dataset.now==="received")$("f-date_off").value=today();
@@ -614,6 +670,7 @@ function build(){
    if(k==="line")syncPicFromLine($("f-line").value);
    return}});
  f.addEventListener("focusin",e=>{
+  if(formReadonly)return;
   const k=e.target.id&&e.target.id.startsWith("f-")?e.target.id.slice(2):null;
   if(k&&SUGGEST_KEYS.includes(k))showSuggestions(k,e.target.value)});
  f.addEventListener("focusout",e=>{
@@ -621,16 +678,14 @@ function build(){
   if(k&&SUGGEST_KEYS.includes(k))setTimeout(()=>hideSuggestions(k),200);
   if(k==="line")syncPicFromLine(e.target.value)});
  f.addEventListener("input",e=>{
+  if(formReadonly)return;
   const k=e.target.id&&e.target.id.startsWith("f-")?e.target.id.slice(2):null;
   if(k==="line")e.target.value=e.target.value.toUpperCase();
   if(k==="project")maskProject(e.target);
   if(k==="rnum")maskRnum(e.target);
   if(k&&VALID[k])validateField(k);
   if(k&&SUGGEST_KEYS.includes(k))showSuggestions(k,e.target.value);
-  if(k==="launched"||k==="date_on"||k==="received"||k==="date_off"||k==="dist"||k==="expspeed")refreshCalcFields()});
- $("save").onclick=submit;
- $("share").onclick=openShare;
- $("delete").onclick=()=>{if(editId)confirmDeleteRun(editId)};
+  if(k==="launched"||k==="date_on"||k==="received"||k==="date_off"||k==="dist"||k==="expspeed"||k==="cdist")refreshCalcFields()});
 }
 function maskProject(el){
  const caret=el.selectionStart;
@@ -676,19 +731,21 @@ function read(){
  r.complete=$("complete").getAttribute("aria-pressed")==="true"?"y":"n";
  return r}
 async function setCompleteNow(id,val){
- const i=runs.findIndex(x=>x.id===id);
+ const arr=activeRunsArr();
+ const i=arr.findIndex(x=>x.id===id);
  if(i===-1)return;
- runs[i]=Object.assign({},runs[i],{complete:val?"y":"n"});
- cacheLocal();
+ arr[i]=Object.assign({},arr[i],{complete:val?"y":"n"});
+ cacheLocal(activeType);
  if(cloudDb){
-  try{await cloudDb.collection("runs").doc(id).set(runs[i])}
+  try{await cloudDb.collection(activeCollName()).doc(id).set(arr[i])}
   catch(e){toast("Saved locally — cloud sync failed")}
  }
  renderList();
 }
 async function submit(){
+ const arr=activeRunsArr();
  if(editId){
-  const existing=runs.find(x=>x.id===editId);
+  const existing=arr.find(x=>x.id===editId);
   if(existing&&!canEdit(existing)){toast("You can only edit your own runs");return}
  }
  const r=read();
@@ -701,20 +758,21 @@ async function submit(){
  if(r.line&&!validateField("line")){toast("Line ID doesn't match the required format");$("f-line").focus();return}
  if(r.rnum&&!validateField("rnum")){toast("Run No. doesn't match the required format");$("f-rnum").focus();return}
  if(editId){
-  const i=runs.findIndex(x=>x.id===editId);
-  r.id=editId;r.ts=i>-1?runs[i].ts:Date.now();
-  r.ownerUid=i>-1?(runs[i].ownerUid||null):(currentUser?currentUser.uid:null);
+  const i=arr.findIndex(x=>x.id===editId);
+  r.id=editId;r.ts=i>-1?arr[i].ts:Date.now();
+  r.ownerUid=i>-1?(arr[i].ownerUid||null):(currentUser?currentUser.uid:null);
  }else{
   r.id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
   r.ts=Date.now();
   r.ownerUid=currentUser?currentUser.uid:null;
  }
- const i=runs.findIndex(x=>x.id===r.id);
- if(i>-1)runs[i]=r;else runs.unshift(r);
- cacheLocal();updateCount();
+ const i=arr.findIndex(x=>x.id===r.id);
+ if(i>-1)arr[i]=r;else arr.unshift(r);
+ cacheLocal(activeType);updateCounts();
  const wasEdit=!!editId;
+ const collName=activeCollName();
  if(cloudDb){
-  try{await cloudDb.collection("runs").doc(r.id).set(r)}
+  try{await cloudDb.collection(collName).doc(r.id).set(r)}
   catch(e){toast("Saved locally — cloud sync failed")}
  }
  toast(wasEdit?"Changes saved":"Run saved");
@@ -724,12 +782,13 @@ let pendingDeleteId=null;
 function confirmDeleteRun(id){pendingDeleteId=id;$("del-back").hidden=false}
 function closeDel(){$("del-back").hidden=true;pendingDeleteId=null}
 async function deleteRunById(id){
- const existing=runs.find(x=>x.id===id);
+ const arr=activeRunsArr();
+ const existing=arr.find(x=>x.id===id);
  if(existing&&!canEdit(existing)){toast("You can only delete your own runs");return}
- runs=runs.filter(r=>r.id!==id);
- cacheLocal();updateCount();
+ setActiveRunsArr(arr.filter(r=>r.id!==id));
+ cacheLocal(activeType);updateCounts();
  if(cloudDb){
-  try{await cloudDb.collection("runs").doc(id).delete()}
+  try{await cloudDb.collection(activeCollName()).doc(id).delete()}
   catch(e){toast("Deleted locally — cloud delete failed")}
  }
  toast("Run deleted");
@@ -745,14 +804,38 @@ function show(v){
  if(v==="list")renderList();
  if(v==="photos"){currentLine=null;renderPhotoLines()}
  window.scrollTo(0,0)}
-function goNew(){if(editId){editId=null;$("save").textContent="Save Run";$("delete").hidden=true;fill(lastDefaults())}show("new")}
-function updateCount(){const n=String(runs.length);$("cnt").textContent=n;$("cnt-home").textContent=n}
+function goNew(){
+ setActiveSchema(activeType);
+ build();
+ editId=null;
+ formReadonly=false;
+ $("form").classList.remove("readonly-form");
+ $("readonly-banner").hidden=true;
+ $("save").hidden=false;
+ $("save").textContent="Save Run";
+ $("delete").hidden=true;
+ fill(lastDefaults());
+ show("new");
+}
+function updateCounts(){
+ $("cnt-ili").textContent=String(runs.length);
+ $("cnt-clp").textContent=String(clpRuns.length);
+ const label=activeType==="clp"?"CLP/GP":"ILI";
+ $("t-new").textContent="New "+label+" Run";
+ $("t-list").innerHTML=label+" Runs (<span id='cnt'>"+String(activeRunsArr().length)+"</span>)";
+}
+function enterSection(type){
+ activeType=type;
+ setActiveSchema(type);
+ updateCounts();
+ show("list");
+}
 $("t-home").onclick=()=>show("home");
 $("t-new").onclick=goNew;
 $("t-list").onclick=()=>show("list");
 $("t-photos").onclick=()=>show("photos");
-$("home-new").onclick=goNew;
-$("home-list").onclick=()=>show("list");
+$("home-ili").onclick=()=>enterSection("ili");
+$("home-clp").onclick=()=>enterSection("clp");
 $("home-photos").onclick=()=>show("photos");
 $("pq").oninput=renderPhotoLines;
 $("photo-lines").onclick=e=>{const it=e.target.closest(".line-item");if(it)openPhotoLine(it.dataset.line)};
@@ -777,13 +860,14 @@ function buildSearchFilter(){
 function renderList(){
  const q=$("q").value.trim().toLowerCase();
  const qf=$("qf").value;
- const res=runs.filter(r=>{
+ const src=activeRunsArr();
+ const res=src.filter(r=>{
   if(!q)return true;
   if(qf)return String(r[qf]||"").toLowerCase().includes(q);
   return F.some(([k])=>String(r[k]||"").toLowerCase().includes(q));
  });
  const L=$("list");
- if(!res.length){L.innerHTML="<div class='empty'>"+(runs.length?"No matches found":"No runs yet. Add your first one on the New Run tab.")+"</div>";return}
+ if(!res.length){L.innerHTML="<div class='empty'>"+(src.length?"No matches found":"No runs yet. Add your first one on the New Run tab.")+"</div>";return}
  L.innerHTML=res.map(r=>{const dr=r.date_on?esc(r.date_on)+(r.date_off&&r.date_off!==r.date_on?" – "+esc(r.date_off):""):"";
   const editable=canEdit(r);
   return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?"<button type='button' class='item-photo-btn' data-line='"+esc(r.line)+"' aria-label='Photos for this line'>📷</button>":"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small></div></div>"}).join("")}
@@ -869,7 +953,7 @@ $("list").onclick=e=>{
  if(Date.now()-lastDragEnd<300)return;
  const delBtn=e.target.closest(".item-del");
  if(delBtn){
-  const dr=runs.find(x=>x.id===delBtn.dataset.id);
+  const dr=activeRunsArr().find(x=>x.id===delBtn.dataset.id);
   if(dr&&!canEdit(dr)){toast("You can only edit your own runs");return}
   confirmDeleteRun(delBtn.dataset.id);return}
  const photoBtn=e.target.closest(".item-photo-btn");
@@ -877,12 +961,23 @@ $("list").onclick=e=>{
  const body=e.target.closest(".item-body");if(!body)return;
  if(body.classList.contains("open")){body.style.transform="";body.classList.remove("open");return}
  const it=e.target.closest(".item");if(!it)return;
- const r=runs.find(x=>x.id===it.dataset.id);if(!r)return;
- if(!canEdit(r)){toast("You can only edit your own runs");return}
- editId=r.id;fill(r);$("save").textContent="Save Changes";$("delete").hidden=false;show("new")};
-const XLSX_COLUMNS=[
+ const r=activeRunsArr().find(x=>x.id===it.dataset.id);if(!r)return;
+ setActiveSchema(activeType);
+ build();
+ editId=r.id;
+ const editable=canEdit(r);
+ formReadonly=!editable;
+ fill(r);
+ $("form").classList.toggle("readonly-form",formReadonly);
+ $("readonly-banner").hidden=editable;
+ $("save").hidden=formReadonly;
+ if(!formReadonly)$("save").textContent="Save Changes";
+ $("delete").hidden=formReadonly;
+ show("new")};
+const XLSX_COLUMNS_ILI=[
  ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
  ["Technology","equip","text"],["Employee","operator","text"],["Expected velocity (m/s)","expspeed","number"],
+ ["Client Info Distance (m)","cdist","number"],
  ["Switched on","on","text"],["Transmitter","tx","yn"],["BM L","bml","yn"],["BM Distance launch (m)","bmdist_bl","number"],
  ["Launcher Picture","lpic","yn"],["Tool Pictures Pre-run","toolpic_bl","yn"],["Pressure launcher (bar)","pl","number"],
  ["Launched","launched","text"],["Date launch","date_on","text"],["BM R","bmr","yn"],["BM Distance run (m)","bmdist_run","number"],
@@ -890,11 +985,24 @@ const XLSX_COLUMNS=[
  ["Switched off","off","text"],["Receiver Picture","rpic","yn"],["Tool Pictures Post-run","toolpic_run","yn"],
  ["Recorded distance (m)","dist","number"],["Data","data","data"],["Notes","notes","text"],["Complete","complete","yn"]
 ];
+const XLSX_COLUMNS_CLP=[
+ ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
+ ["Technology","equip","text"],["Employee","operator","text"],["Client Info Distance (m)","cdist","number"],
+ ["Transmitter","tx","yn"],["Launcher Picture","lpic","yn"],["Tool Pictures Pre-run","toolpic_bl","yn"],["Pressure launcher (bar)","pl","number"],
+ ["Launched","launched","text"],["Date launch","date_on","text"],
+ ["Received","received","text"],["Date receive","date_off","text"],["Pressure receiver (bar)","pr","number"],
+ ["Receiver Picture","rpic","yn"],["Tool Pictures Post-run","toolpic_run","yn"],
+ ["Notes","notes","text"],["Complete","complete","yn"]
+];
 function exportXlsx(){
- if(!runs.length){toast("No runs to export yet");return}
- const header=XLSX_COLUMNS.map(c=>c[0]).concat(["Run duration","Average velocity (m/s)","Above expected velocity?"]);
- const rows=runs.map(r=>{
-  const row=XLSX_COLUMNS.map(([label,key,kind])=>{
+ const arr=activeRunsArr();
+ if(!arr.length){toast("No runs to export yet");return}
+ const isClp=activeType==="clp";
+ const cols=isClp?XLSX_COLUMNS_CLP:XLSX_COLUMNS_ILI;
+ const extraHeaders=["Run duration","Average velocity (m/s)"].concat(isClp?[]:["Above expected velocity?","Distance Difference (m)"]);
+ const header=cols.map(c=>c[0]).concat(extraHeaders);
+ const rows=arr.map(r=>{
+  const row=cols.map(([label,key,kind])=>{
    if(kind==="number"){const n=parseNum(r[key]);return isFinite(n)?n:""}
    if(kind==="yn")return r[key]==="y"?"Yes":r[key]==="n"?"No":"";
    if(kind==="data")return r.data?(parseNum(r.data)||r.data)+" "+(r["data-unit"]||"GB"):"";
@@ -902,22 +1010,26 @@ function exportXlsx(){
   });
   const ms=durationMs(r);
   row.push(ms===null?"":durationText(r));
-  const dist=parseNum(r.dist),exp=parseNum(r.expspeed);
-  let avg="";
-  if(ms!==null&&ms>0&&isFinite(dist)&&dist>0)avg=+((dist/(ms/1000)).toFixed(2));
-  row.push(avg);
-  row.push(speedOverExpected(r)?"Yes":"No");
+  const avgTxt=avgSpeedText(r);
+  row.push(avgTxt==="—"?"":parseFloat(avgTxt));
+  if(!isClp){
+   row.push(speedOverExpected(r)?"Yes":"No");
+   const diffTxt=distDiffText(r);
+   row.push(diffTxt==="—"?"":parseFloat(diffTxt));
+  }
   return row;
  });
  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
  ws["!cols"]=header.map(()=>({wch:16}));
  const wb=XLSX.utils.book_new();
- XLSX.utils.book_append_sheet(wb,ws,"Runs");
+ XLSX.utils.book_append_sheet(wb,ws,isClp?"CLP-GP Runs":"Runs");
  const stamp=new Date().toISOString().slice(0,10);
- XLSX.writeFile(wb,"RORUN_export_"+stamp+".xlsx");
+ XLSX.writeFile(wb,(isClp?"RORUN_CLPGP_export_":"RORUN_export_")+stamp+".xlsx");
 }
 $("emailxl").onclick=exportXlsx;
-build();fill(lastDefaults());buildSearchFilter();updateCount();initCloud();show("home");
+setActiveSchema("ili");
+initFormListeners();
+build();fill(lastDefaults());buildSearchFilter();updateCounts();initCloud();show("home");
 </script>
 </body>
 </html>
