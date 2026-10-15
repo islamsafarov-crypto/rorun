@@ -454,7 +454,8 @@ async function addPhotosForLine(line,kind,files){
    const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
    const doc={id,assetId:res.id,url:res.url,line,kind,uploadedAt:Date.now(),hash:hash||null};
    await cloudDb.collection("photos").doc(id).set(doc);
-   photos.unshift(doc);
+   const existingIdx=photos.findIndex(p=>p.id===id);
+   if(existingIdx===-1)photos.unshift(doc);else photos[existingIdx]=doc;
    if(hash)seen.add(hash);
    okCount++;
    if(!$("v-photo-line").hidden&&currentLine===line)renderPhotoLine(line);
