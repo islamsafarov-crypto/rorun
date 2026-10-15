@@ -36,6 +36,7 @@ nav button[aria-selected="true"]{background:var(--acc);color:var(--acc-ink);bord
 .home-card{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:30px 14px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;font:inherit}
 .home-ic{font-size:28px;color:var(--acc)}
 .home-ic-img{width:30px;height:30px;object-fit:contain;display:block}
+.home-ic-photo{width:46px;height:46px;object-fit:cover;display:block;border-radius:10px}
 .home-label{font-size:17px;font-weight:600}
 .home-count{position:absolute;top:10px;right:12px;background:var(--acc);color:var(--acc-ink);border-radius:20px;padding:2px 9px;font-size:12px;font-weight:600}
 fieldset{border:1px solid var(--line);background:var(--card);border-radius:6px;margin:0 0 12px;padding:8px 14px 14px}
@@ -139,8 +140,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <div class="home-title">R<span class="brand-o"></span>RUN</div>
 <div class="home-sub">ILI run log</div>
 <div class="home-grid">
- <button type="button" class="home-card" id="home-ili"><span class="home-ic">📋</span><span class="home-label">ILI Runs</span><span class="home-count" id="cnt-ili">0</span></button>
- <button type="button" class="home-card" id="home-clp"><span class="home-ic">🧹</span><span class="home-label">CLP/GP Runs</span><span class="home-count" id="cnt-clp">0</span></button>
+ <button type="button" class="home-card" id="home-ili"><img class="home-ic-photo" src="ili-icon.png" alt=""><span class="home-label">ILI Runs</span><span class="home-count" id="cnt-ili">0</span></button>
+ <button type="button" class="home-card" id="home-clp"><img class="home-ic-photo" src="clp-icon.png" alt=""><span class="home-label">CLP/GP Runs</span><span class="home-count" id="cnt-clp">0</span></button>
  <button type="button" class="home-card" id="home-photos"><img class="home-ic-img" src="photos-icon.png" alt=""><span class="home-label">Photos</span></button>
 </div>
 <div id="whoami" style="text-align:center;margin-top:14px;font-size:12px;color:var(--mute)"></div>
