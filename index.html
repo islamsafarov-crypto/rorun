@@ -37,11 +37,8 @@ nav button[aria-selected="true"]{background:var(--acc);color:var(--acc-ink);bord
 .home-grid{display:grid;gap:14px;margin-top:6px}
 .home-logo{display:block;max-width:140px;width:36%;margin:34px auto 0;opacity:.55;filter:brightness(0) invert(1)}
 .home-card{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:158px;padding:24px 14px;border:0;background:var(--card);color:var(--ink);border-radius:8px;font:inherit}
-.home-card.slim{flex-direction:row;justify-content:center;gap:14px;min-height:0;padding:24px 14px}
 .home-glyph{width:58px;height:58px;fill:#fff;display:block}
-.home-card.slim .home-glyph{width:36px;height:36px}
 .home-label{font-size:21px;font-weight:700}
-.home-card.slim .home-label{font-size:20px}
 .home-count{position:absolute;top:10px;right:10px;min-width:28px;text-align:center;background:var(--acc);color:var(--acc-ink);border-radius:4px;padding:3px 8px;font-size:13px;font-weight:700}
 .me-info{padding:2px 4px 12px;font-size:14px;color:var(--ink);word-break:break-all}
 fieldset{border:1px solid var(--line);background:var(--card);border-radius:8px;margin:0 0 12px;padding:8px 14px 14px}
@@ -146,7 +143,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="g-ili" viewBox="0 0 64 64"><g stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"><line x1="3" y1="11" x2="61" y2="11"/><line x1="3" y1="53" x2="61" y2="53"/></g><g transform="translate(-4 0)"><rect x="16" y="26" width="32" height="12" rx="3"/><path d="M10 17 L16 23 V41 L10 47 Z"/><path d="M48 17 L54 23 V41 L48 47 Z"/><rect x="22" y="21" width="5" height="5" rx="1"/><rect x="29.5" y="21" width="5" height="5" rx="1"/><rect x="37" y="21" width="5" height="5" rx="1"/><rect x="22" y="38" width="5" height="5" rx="1"/><rect x="29.5" y="38" width="5" height="5" rx="1"/><rect x="37" y="38" width="5" height="5" rx="1"/><path d="M54 27.5 H56 A4.5 4.5 0 0 1 56 36.5 H54" fill="none" stroke="#fff" stroke-width="2.8"/></g></symbol>
 <symbol id="g-clp" viewBox="0 0 64 64"><g stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"><line x1="3" y1="11" x2="61" y2="11"/><line x1="3" y1="53" x2="61" y2="53"/></g><g transform="translate(-4 0)"><rect x="12" y="27" width="40" height="10" rx="2"/><rect x="8" y="17" width="6" height="30" rx="1.5"/><rect x="16.5" y="17" width="2.5" height="30" rx="1"/><rect x="21.5" y="17" width="2.5" height="30" rx="1"/><rect x="50" y="17" width="6" height="30" rx="1.5"/><rect x="45" y="17" width="2.5" height="30" rx="1"/><rect x="40" y="17" width="2.5" height="30" rx="1"/><path d="M56 27.5 H58 A4.5 4.5 0 0 1 58 36.5 H56" fill="none" stroke="#fff" stroke-width="2.8"/></g></symbol>
-<symbol id="g-ph" viewBox="0 0 64 64"><rect x="20" y="8" width="36" height="28" rx="4" opacity=".4"/><rect x="13" y="16" width="36" height="28" rx="4" opacity=".7"/><rect x="6" y="24" width="38" height="30" rx="4"/><circle cx="17" cy="35" r="3.5" style="fill:var(--card)"/><path d="M9 51l12-11 8 7 6-5 9 9z" style="fill:var(--card)"/></symbol>
+<symbol id="g-ph" viewBox="0 0 64 64"><g stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"><line x1="3" y1="11" x2="61" y2="11"/><line x1="3" y1="53" x2="61" y2="53"/></g><rect x="20" y="17.5" width="34" height="26" rx="3" fill="none" stroke="#fff" stroke-width="2.6"/><rect x="10" y="22" width="34" height="26" rx="3"/><circle cx="19.5" cy="30" r="3.4" style="fill:var(--card)"/><path d="M12 46 L23 35.5 L29.5 41.5 L34 37.5 L42 46 Z" style="fill:var(--card)"/></symbol>
 </defs></svg>
 <header class="appbar" id="appbar">
 <button type="button" class="ab-btn" id="ab-back" aria-label="Back" hidden><svg viewBox="0 0 26 26"><path d="M16 4l-9 9 9 9"/></svg></button>
@@ -160,7 +157,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <div class="home-grid">
  <button type="button" class="home-card" id="home-ili"><svg class="home-glyph" aria-hidden="true"><use href="#g-ili"/></svg><span class="home-label">ILI Runs</span><span class="home-count" id="cnt-ili">0</span></button>
  <button type="button" class="home-card" id="home-clp"><svg class="home-glyph" aria-hidden="true"><use href="#g-clp"/></svg><span class="home-label">CLP/GP Runs</span><span class="home-count" id="cnt-clp">0</span></button>
- <button type="button" class="home-card slim" id="home-photos"><svg class="home-glyph" aria-hidden="true"><use href="#g-ph"/></svg><span class="home-label">Photos</span></button>
+ <button type="button" class="home-card" id="home-photos"><svg class="home-glyph" aria-hidden="true"><use href="#g-ph"/></svg><span class="home-label">Photos</span></button>
 </div>
 <img class="home-logo" src="rosen-logo.png" alt="ROSEN">
 </section>
