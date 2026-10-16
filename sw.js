@@ -1,4 +1,4 @@
-const CACHE = "rorun-shell-v2";
+const CACHE = "rorun-shell-v3";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -6,7 +6,6 @@ const SHELL_ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png",
-  "./photos-icon.png",
   "./rosen-logo.png"
 ];
 
