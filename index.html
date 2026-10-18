@@ -142,6 +142,14 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .splash img{width:min(58vw,280px);height:auto;border-radius:22%;box-shadow:0 10px 40px rgba(0,0,0,.45);opacity:0;transform:scale(.94);animation:splashIn .7s ease-out .05s forwards}
 @keyframes splashIn{to{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.splash,.splash img{transition:none;animation:none;opacity:1;transform:none}}
+.photo-thumb.pending{opacity:.72;border:2px dashed var(--warm)}
+.photo-thumb.pending::after{content:"⏳";position:absolute;left:4px;bottom:2px;font-size:14px}
+.pl-pending{background:var(--card);border:1px dashed var(--warm);color:var(--warm);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+.pl-pending[hidden]{display:none}
+.pic-warn-msg{display:none;color:var(--warm);font-size:12px;margin-top:4px}
+.pic-warn .pic-warn-msg{display:block}
+.pic-warn .yn{outline:1px solid var(--warm);border-radius:4px}
+.warn-line{color:var(--warm)!important;font-weight:600}
 </style>
 </head>
 <body>
@@ -183,6 +191,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
 <button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
 <button type="button" class="ghost photo-add" id="pl-mailall" hidden></button>
+<button type="button" class="ghost photo-add" id="pl-pdf" hidden>📄 PDF report of this line</button>
+<div class="pl-pending" id="pl-pending" hidden></div>
 <div id="pl-sections"></div>
 </section>
 <section id="v-list" hidden>
@@ -212,6 +222,16 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
   <h3>Delete this run? This cannot be undone.</h3>
   <button type="button" id="del-confirm" style="justify-content:center;color:var(--no);border-color:var(--no);font-weight:600">Delete Run</button>
   <button type="button" class="cancel" id="del-cancel">Cancel</button>
+ </div>
+</div>
+<div class="sheet-back" id="rep-back" hidden>
+ <div class="sheet">
+  <div class="grabber"></div>
+  <h3>PDF report is ready</h3>
+  <div class="me-info" id="rep-info"></div>
+  <button type="button" id="rep-share" style="justify-content:center;font-weight:600">Share / email PDF</button>
+  <button type="button" id="rep-open" style="justify-content:center">Open / save PDF</button>
+  <button type="button" class="cancel" id="rep-cancel">Close</button>
  </div>
 </div>
 <div class="photo-view-back" id="photo-view-back" hidden>
@@ -295,6 +315,7 @@ let activeType="ili",formReadonly=false;
 let runs=[],clpRuns=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false,currentUser=null,listenersAttached=false;
 const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
+let pendingPhotos=[];const pendingUrls=new Map();let statusMode="checking";
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
 try{clpRuns=JSON.parse(localStorage.getItem("clpRuns")||"[]")}catch(e){clpRuns=[]}
 const $=id=>document.getElementById(id);
@@ -309,9 +330,11 @@ function cacheLocal(type){
  }catch(e){}
 }
 function setStatus(mode){
+ statusMode=mode;
  const s=$("status");if(!s)return;
  s.className="status "+mode;
- s.innerHTML="<span class='dot'></span>"+(mode==="cloud"?"Synced — shared with your team":mode==="local"?"Offline — saved on this device only":"Connecting…");
+ const n=pendingPhotos.length;
+ s.innerHTML="<span class='dot'></span>"+(mode==="cloud"?"Synced — shared with your team":mode==="local"?"Offline — saved on this device only":"Connecting…")+(n?" · "+n+" photo"+(n>1?"s":"")+" waiting to upload":"");
 }
 function makeAssetsApi(){
  return{
@@ -319,7 +342,9 @@ function makeAssetsApi(){
    const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
    const path="photos/"+id+".jpg";
    const ref=storageRef.child(path);
-   await ref.put(blob,{contentType:"image/jpeg"});
+   const task=ref.put(blob,{contentType:"image/jpeg"});
+   const killer=setTimeout(()=>{try{task.cancel()}catch(e){}},30000);
+   try{await task}finally{clearTimeout(killer)}
    const url=await ref.getDownloadURL();
    return{id:path,url:url};
   },
@@ -395,6 +420,7 @@ async function initCloud(){
   hideLogin();
   setStatus("cloud");
   attachCloudListeners();
+  processPhotoQueue();
  });
 }
 function attachCloudListeners(){
@@ -419,6 +445,7 @@ function attachCloudListeners(){
   if(!$("v-photo-line").hidden&&currentLine)renderPhotoLine(currentLine);
   if(!$("v-list").hidden)renderList();
   updateFormPhotoBtn();
+  updatePicWarnings();
  },err=>{toast("Photo sync interrupted")});
 }
 async function cleanupOldPhotos(){
@@ -474,11 +501,14 @@ function renderPhotoLine(line){
  const mine=photos.filter(p=>p.line===line);
  $("pl-sections").innerHTML=KINDS.map(([k,label])=>{
   const items=mine.filter(p=>p.kind===k).sort((a,b)=>b.uploadedAt-a.uploadedAt);
-  return "<div class='kind-section'><div class='kind-section-title'>"+label+" ("+items.length+")</div><div class='photo-grid' data-k='"+k+"'>"+
+  const pend=pendingPhotos.filter(p=>p.line===line&&p.kind===k);
+  return "<div class='kind-section'><div class='kind-section-title'>"+label+" ("+items.length+")"+(pend.length?" · "+pend.length+" waiting":"")+"</div><div class='photo-grid' data-k='"+k+"'>"+
+   pend.map(p=>"<div class='photo-thumb pending' data-url='"+pendingUrl(p)+"' style=\"background-image:url('"+pendingUrl(p)+"')\"><span class='photo-del' data-q='"+p.qid+"'>×</span></div>").join("")+
    items.map(p=>"<div class='photo-thumb' data-url='"+esc(p.url||"")+"' style=\"background-image:url('"+esc(p.url||"")+"')\"><span class='photo-del' data-id='"+p.id+"'>×</span></div>").join("")+
    "</div></div>";
  }).join("");
  updateMailBtn();
+ updatePendingBanner();
 }
 function kindLabel(k){const x=KINDS.find(a=>a[0]===k);return x?x[1]:k}
 const blobCache=new Map();
@@ -506,6 +536,8 @@ function updateMailBtn(){
  const total=line?photos.filter(p=>p.line===line).length:0;
  b.hidden=!(navigator.share&&n);
  b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
+ const pdfb=$("pl-pdf");
+ if(pdfb){const hasRuns=!!line&&(runs.some(r=>r.line===line)||clpRuns.some(r=>r.line===line));pdfb.hidden=!(line&&(total||hasRuns||pendingPhotos.some(p=>p.line===line)))}
  if(ba){ba.hidden=!(navigator.share&&total);ba.textContent="✉ Email all photos of this line ("+total+")"}
  prefetchLine(line);
 }
@@ -549,39 +581,136 @@ async function blobSha256(blob){
  const digest=await crypto.subtle.digest("SHA-256",buf);
  return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+const QDB={
+ db:null,
+ open(){
+  if(this.db)return Promise.resolve(this.db);
+  return new Promise((res,rej)=>{
+   if(!window.indexedDB){rej(new Error("no idb"));return}
+   const r=indexedDB.open("rorun-queue",1);
+   r.onupgradeneeded=()=>{r.result.createObjectStore("q",{keyPath:"qid"})};
+   r.onsuccess=()=>{this.db=r.result;res(r.result)};
+   r.onerror=()=>rej(r.error);
+  });
+ },
+ async tx(mode,fn){
+  const db=await this.open();
+  return new Promise((res,rej)=>{
+   const t=db.transaction("q",mode);const st=t.objectStore("q");
+   const rq=fn(st);
+   t.oncomplete=()=>res(rq&&rq.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);
+  });
+ },
+ all(){return this.tx("readonly",s=>s.getAll())},
+ put(it){return this.tx("readwrite",s=>s.put(it))},
+ del(id){return this.tx("readwrite",s=>s.delete(id))}
+};
+function newId(){return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8)}
+function withTimeout(p,ms){return Promise.race([p,new Promise(res=>setTimeout(()=>res("timeout"),ms))])}
+function hasPhoto(line,kind){return !!line&&(photos.some(p=>p.line===line&&p.kind===kind)||pendingPhotos.some(p=>p.line===line&&p.kind===kind))}
+function canUploadNow(){return !!(assetsApi&&cloudDb&&currentUser&&navigator.onLine!==false)}
+function pendingUrl(it){let u=pendingUrls.get(it.qid);if(!u){u=URL.createObjectURL(it.blob);pendingUrls.set(it.qid,u)}return u}
+function updatePendingBanner(){
+ const b=$("pl-pending");if(!b)return;
+ const n=currentLine?pendingPhotos.filter(p=>p.line===currentLine).length:0;
+ b.hidden=!n;
+ b.textContent=n?"⏳ "+n+" photo"+(n>1?"s":"")+" saved on this phone — will upload automatically when you are online":"";
+}
+function updatePendingUi(){
+ setStatus(statusMode);
+ if(!$("v-photo-line").hidden&&currentLine)renderPhotoLine(currentLine);else updatePendingBanner();
+ updatePicWarnings();
+ if(!$("v-list").hidden)renderList();
+}
+async function loadPhotoQueue(){
+ try{const all=await QDB.all();pendingPhotos=(all||[]).sort((a,b)=>a.ts-b.ts)}catch(e){}
+ updatePendingUi();
+}
+async function enqueuePhoto(item){
+ item.qid=newId();item.ts=Date.now();
+ pendingPhotos.push(item);
+ try{await QDB.put(item)}catch(e){}
+ updatePendingUi();
+}
+async function dropPending(qid){
+ pendingPhotos=pendingPhotos.filter(p=>p.qid!==qid);
+ const u=pendingUrls.get(qid);if(u){URL.revokeObjectURL(u);pendingUrls.delete(qid)}
+ try{await QDB.del(qid)}catch(e){}
+ updatePendingUi();
+}
+async function uploadPhotoNow(it){
+ const res=await assetsApi.upload(it.blob);
+ const id=newId();
+ const doc={id,assetId:res.id,url:res.url,line:it.line,kind:it.kind,uploadedAt:Date.now(),hash:it.hash||null};
+ // If the connection drops right here, Firestore keeps the write and sends it later.
+ await withTimeout(cloudDb.collection("photos").doc(id).set(doc),8000);
+ if(!photos.some(p=>p.id===id))photos.unshift(doc);
+ return doc;
+}
+let qRunning=false;
+async function processPhotoQueue(){
+ if(qRunning||!pendingPhotos.length||!canUploadNow())return;
+ qRunning=true;
+ let sent=0;
+ try{
+  for(const item of pendingPhotos.slice()){
+   if(!canUploadNow())break;
+   if(item.hash&&photos.some(p=>p.line===item.line&&p.kind===item.kind&&p.hash===item.hash)){await dropPending(item.qid);continue}
+   try{await uploadPhotoNow(item);await dropPending(item.qid);sent++;await markPictureTaken(item.line,item.kind)}
+   catch(e){break}
+  }
+ }finally{qRunning=false}
+ if(sent)toast(sent+" waiting photo"+(sent>1?"s":"")+" uploaded");
+ updatePendingUi();
+}
 async function addPhotosForLine(line,kind,files){
- if(!assetsApi||!cloudDb){toast("Photo storage unavailable — check your connection");return}
  const list=Array.from(files||[]);
  if(!list.length)return;
- toast("Uploading "+list.length+" photo"+(list.length>1?"s":"")+"…");
- let okCount=0,dupCount=0;
- const seen=new Set(photos.filter(p=>p.line===line&&p.kind===kind&&p.hash).map(p=>p.hash));
+ toast("Adding "+list.length+" photo"+(list.length>1?"s":"")+"…");
+ let okCount=0,dupCount=0,queued=0;
+ const seen=new Set(photos.concat(pendingPhotos).filter(p=>p.line===line&&p.kind===kind&&p.hash).map(p=>p.hash));
  for(const file of list){
-  try{
-   const blob=await compressImage(file);
-   const hash=await blobSha256(blob).catch(()=>null);
-   if(hash&&seen.has(hash)){dupCount++;continue}
-   const res=await assetsApi.upload(blob);
-   const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8);
-   const doc={id,assetId:res.id,url:res.url,line,kind,uploadedAt:Date.now(),hash:hash||null};
-   await cloudDb.collection("photos").doc(id).set(doc);
-   const existingIdx=photos.findIndex(p=>p.id===id);
-   if(existingIdx===-1)photos.unshift(doc);else photos[existingIdx]=doc;
-   if(hash)seen.add(hash);
-   okCount++;
-   if(!$("v-photo-line").hidden&&currentLine===line)renderPhotoLine(line);
-  }catch(e){toast("A photo failed to upload")}
+  let blob;
+  try{blob=await compressImage(file)}catch(e){toast("A photo could not be read");continue}
+  const hash=await blobSha256(blob).catch(()=>null);
+  if(hash&&seen.has(hash)){dupCount++;continue}
+  if(hash)seen.add(hash);
+  let done=false;
+  if(canUploadNow()){
+   try{await uploadPhotoNow({line,kind,blob,hash});done=true;okCount++}catch(e){}
+  }
+  if(!done){await enqueuePhoto({line,kind,blob,hash});queued++}
+  if(!$("v-photo-line").hidden&&currentLine===line)renderPhotoLine(line);
  }
- if(okCount&&dupCount)toast(okCount+" added, "+dupCount+" duplicate"+(dupCount>1?"s":"")+" skipped");
+ if(queued)toast(queued+" photo"+(queued>1?"s":"")+" saved on this phone — will upload when online");
+ else if(okCount&&dupCount)toast(okCount+" added, "+dupCount+" duplicate"+(dupCount>1?"s":"")+" skipped");
  else if(okCount)toast(okCount+" photo"+(okCount>1?"s":"")+" added");
  else if(dupCount)toast("Already uploaded — skipped "+dupCount+" duplicate"+(dupCount>1?"s":""));
- if(okCount)await markPictureTaken(line,kind);
+ if(queued){markPictureTaken(line,kind)}
+ else if(okCount){await markPictureTaken(line,kind)}
+ updatePicWarnings();
 }
 const KIND_TO_FIELD={launcher:"lpic",prerun:"toolpic_bl",receiver:"rpic",postrun:"toolpic_run"};
+const PIC_KIND={lpic:"launcher",toolpic_bl:"prerun",rpic:"receiver",toolpic_run:"postrun"};
+function missingPics(r){
+ if(!r||!r.line)return [];
+ return Object.keys(PIC_KIND).filter(f=>r[f]==="y"&&!hasPhoto(r.line,PIC_KIND[f])).map(f=>kindLabel(PIC_KIND[f]));
+}
+function updatePicWarnings(){
+ if(!$("form"))return;
+ const line=formLine();
+ const ok=!!line&&VALID.line.re.test(line);
+ Object.keys(PIC_KIND).forEach(f=>{
+  const el=document.querySelector("#form [data-k='"+f+"']");if(!el)return;
+  const on=el.querySelector("[aria-pressed='true']");
+  const warn=ok&&!!on&&on.dataset.v==="y"&&!hasPhoto(line,PIC_KIND[f]);
+  const wrap=el.closest(".f");if(wrap)wrap.classList.toggle("pic-warn",warn);
+ });
+}
 function syncPicFromLine(line){
  if(!line)return;
  [["lpic","launcher"],["rpic","receiver"]].forEach(([field,kind])=>{
-  if(photos.some(p=>p.line===line&&p.kind===kind)){
+  if(hasPhoto(line,kind)){
    document.querySelectorAll("[data-k='"+field+"'] button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v==="y")));
   }
  });
@@ -611,7 +740,7 @@ async function markInArr(arr,collName,type,line,field){
  arr[i]=Object.assign({},arr[i],{[field]:"y"});
  cacheLocal(type);
  if(cloudDb){
-  try{await cloudDb.collection(collName).doc(id).set(arr[i])}
+  try{await withTimeout(cloudDb.collection(collName).doc(id).set(arr[i]),4000)}
   catch(e){}
  }
  if(!$("v-new").hidden&&editId===id&&activeType===type){
@@ -725,7 +854,7 @@ function lastDefaults(){
 const PAIR_ROWS=new Set(["line+rnum","tx+bml","lpic+toolpic_bl","bmr+bmdist_run","rpic+toolpic_run","dist+distdiff","duration+avgspeed"]);
 function fieldInner(k,l,t,u){
  let h="<label for='f-"+k+"'>"+l+"</label>";
- if(t==="yn")h+="<div class='yn' data-k='"+k+"'><button type='button' data-v='y'>Yes</button><button type='button' data-v='n'>No</button></div>";
+ if(t==="yn")h+="<div class='yn' data-k='"+k+"'><button type='button' data-v='y'>Yes</button><button type='button' data-v='n'>No</button></div>"+(PIC_KIND[k]?"<div class='pic-warn-msg'>⚠ Marked Yes, but no "+kindLabel(PIC_KIND[k])+" photo found for this line</div>":"");
  else if(t==="time")h+="<div class='row'><input type='time' id='f-"+k+"'><button type='button' class='now' data-now='"+k+"'>Now</button></div>";
  else if(t==="num")h+="<div class='unit'><input type='text' inputmode='decimal' id='f-"+k+"'><span>"+u+"</span></div>";
  else if(t==="dnum")h+="<div class='unit'><input type='text' inputmode='decimal' id='f-"+k+"'><div class='ut' data-k='"+k+"-unit'>"+u.map(o=>"<button type='button' data-v='"+o+"'>"+o+"</button>").join("")+"</div></div>";
@@ -761,6 +890,7 @@ function build(){
  const b=document.createElement("button");b.className="save";b.id="save";b.textContent="Save Run";f.appendChild(b);
  const sh=document.createElement("button");sh.type="button";sh.className="ghost share-btn";sh.id="share";sh.textContent="Share";f.appendChild(sh);
  const ph=document.createElement("button");ph.type="button";ph.className="ghost share-btn photos-btn";ph.id="formphotos";f.appendChild(ph);
+ const rr=document.createElement("button");rr.type="button";rr.className="ghost share-btn";rr.id="rerun";rr.textContent="↻ Rerun — same line & technology";rr.hidden=true;f.appendChild(rr);
  const del=document.createElement("button");del.type="button";del.className="ghost danger-btn";del.id="delete";del.textContent="Delete Run";del.hidden=true;f.appendChild(del);
  $("save").onclick=submit;
  $("share").onclick=openShare;
@@ -769,9 +899,33 @@ function build(){
   if(!VALID.line.re.test(l)){toast("Enter a valid Line ID first");return}
   openPhotoLine(l,"new");
  };
- if(!f._plBound){f._plBound=1;f.addEventListener("input",e=>{if(e.target.id==="f-line")updateFormPhotoBtn()})}
+ if(!f._plBound){f._plBound=1;f.addEventListener("input",e=>{if(e.target.id==="f-line"){updateFormPhotoBtn();updatePicWarnings()}})}
  updateFormPhotoBtn();
+ $("rerun").onclick=()=>{if(editId)startRerun(editId)};
  $("delete").onclick=()=>{if(editId)confirmDeleteRun(editId)};
+}
+function nextRunNo(base){
+ let max=0;
+ activeRunsArr().forEach(x=>{
+  if(x.line===base.line&&x.project===base.project&&x.equip===base.equip){
+   const m=/^R(\d{1,2})$/.exec(x.rnum||"");if(m)max=Math.max(max,+m[1]);
+  }
+ });
+ const own=/^R(\d{1,2})$/.exec(base.rnum||"");
+ const n=Math.max(max,own?+own[1]:0)+1;
+ return n>99?"":"R"+n;
+}
+function startRerun(id){
+ const base=activeRunsArr().find(x=>x.id===id);if(!base)return;
+ const keys=activeType==="clp"?["project","client","line","equip","operator","origid","cdist"]:["project","client","line","equip","operator","expspeed","cdist"];
+ const seed={};keys.forEach(k=>{seed[k]=base[k]||""});
+ seed.rnum=nextRunNo(base);
+ setActiveSchema(activeType);build();
+ editId=null;formReadonly=false;
+ $("form").classList.remove("readonly-form");$("readonly-banner").hidden=true;
+ $("save").hidden=false;$("save").textContent="Save Run";$("delete").hidden=true;
+ fill(seed);show("new");
+ toast("Rerun "+(seed.rnum||"")+" — same line and technology");
 }
 function initFormListeners(){
  const f=$("form");
@@ -784,7 +938,8 @@ function initFormListeners(){
   const u=e.target.closest(".ut button");if(u){u.parentNode.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));u.setAttribute("aria-pressed","true");return}
   const y=e.target.closest(".yn button");if(y){const on=y.getAttribute("aria-pressed")==="true";
    y.parentNode.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
-   if(!on)y.setAttribute("aria-pressed","true");return}
+   if(!on)y.setAttribute("aria-pressed","true");
+   updatePicWarnings();return}
   const c=e.target.closest("#complete");if(c){const on=c.getAttribute("aria-pressed")==="true";
    c.setAttribute("aria-pressed",String(!on));c.textContent=!on?"✓ Run Complete":"Mark Run Complete";
    if(editId)setCompleteNow(editId,!on);
@@ -845,6 +1000,7 @@ function fill(r){
   else{$("f-"+k).value=r[k]||(k==="rnum"?"R":"");if(VALID[k])$("f-"+k).closest(".f").classList.remove("err")}});
  $("complete").setAttribute("aria-pressed",String(r.complete==="y"));
  $("complete").textContent=r.complete==="y"?"✓ Run Complete":"Mark Run Complete";
+ updatePicWarnings();
 }
 function read(){
  const r={};
@@ -877,8 +1033,8 @@ async function submit(){
  }
  const r=read();
  if(r.line){
-  if(photos.some(p=>p.line===r.line&&p.kind==="launcher"))r.lpic="y";
-  if(photos.some(p=>p.line===r.line&&p.kind==="receiver"))r.rpic="y";
+  if(hasPhoto(r.line,"launcher"))r.lpic="y";
+  if(hasPhoto(r.line,"receiver"))r.rpic="y";
  }
  if(!r.project){toast("Enter a project number");$("f-project").focus();return}
  if(!validateField("project")){toast("Project doesn't match the required format");$("f-project").focus();return}
@@ -897,12 +1053,13 @@ async function submit(){
  if(i>-1)arr[i]=r;else arr.unshift(r);
  cacheLocal(activeType);updateCounts();
  const wasEdit=!!editId;
+ let savedOffline=false;
  const collName=activeCollName();
  if(cloudDb){
-  try{await cloudDb.collection(collName).doc(r.id).set(r)}
+  try{const w=await withTimeout(cloudDb.collection(collName).doc(r.id).set(r),4000);if(w==="timeout")savedOffline=true}
   catch(e){toast("Saved locally — cloud sync failed")}
  }
- toast(wasEdit?"Changes saved":"Run saved");
+ toast(savedOffline?"Saved on this phone — will sync when online":(wasEdit?"Changes saved":"Run saved"));
  editId=null;$("save").textContent="Save Run";$("delete").hidden=true;fill(lastDefaults());show("list");renderList();
 }
 let pendingDeleteId=null;
@@ -1003,7 +1160,7 @@ $("pl-mailall").onclick=()=>emailPhotos(true);
 $("pl-add").onclick=()=>$("pl-file-input").click();
 $("pl-file-input").onchange=e=>{addPhotosForLine(currentLine,pendingKind,e.target.files);e.target.value=""};
 $("pl-sections").addEventListener("click",e=>{
- const d=e.target.closest(".photo-del");if(d){e.stopPropagation();deleteGalleryPhoto(d.dataset.id);return}
+ const d=e.target.closest(".photo-del");if(d){e.stopPropagation();if(d.dataset.q)dropPending(d.dataset.q);else deleteGalleryPhoto(d.dataset.id);return}
  const t=e.target.closest(".photo-thumb");if(t){openPhotoViewer(t.dataset.url);return}
 });
 $("photo-view-back").addEventListener("click",e=>{if(e.target.id==="photo-view-back")closePhotoViewer()});
@@ -1025,7 +1182,8 @@ function renderList(){
  if(!res.length){L.innerHTML="<div class='empty'>"+(src.length?"No matches found":"No runs yet. Add your first one on the New Run tab.")+"</div>";return}
  L.innerHTML=res.map(r=>{const dr=r.date_on?esc(r.date_on)+(r.date_off&&r.date_off!==r.date_on?" – "+esc(r.date_off):""):"";
   const editable=canEdit(r);
-  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?photoBtnHtml(r.line):"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small></div></div>"}).join("")}
+  const miss=missingPics(r);
+  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?photoBtnHtml(r.line):"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small>"+(miss.length?"<small class='warn-line'>⚠ No "+miss.map(esc).join(", ")+" photo"+(miss.length>1?"s":"")+"</small>":"")+"</div></div>"}).join("")}
 function esc(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function shareText(){
  const r=read();
@@ -1128,6 +1286,7 @@ $("list").onclick=e=>{
  $("save").hidden=formReadonly;
  if(!formReadonly)$("save").textContent="Save Changes";
  $("delete").hidden=formReadonly;
+ $("rerun").hidden=false;
  show("new")};
 const XLSX_COLUMNS_ILI=[
  ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
@@ -1185,8 +1344,241 @@ function exportXlsx(){
  XLSX.writeFile(wb,(isClp?"RORUN_CLPGP_export_":"RORUN_export_")+stamp+".xlsx");
 }
 $("emailxl").onclick=exportXlsx;
+/* ---------- PDF line report (no external library; pages are drawn on canvas and packed into a PDF) ---------- */
+function makePdf(pages){
+ const enc=new TextEncoder();const parts=[];let len=0;const offs=[];
+ const push=d=>{const u=typeof d==="string"?enc.encode(d):d;parts.push(u);len+=u.length};
+ push("%PDF-1.4\n%âãÏÓ\n");
+ const n=pages.length;
+ const obj=(num,body)=>{offs[num]=len;push(num+" 0 obj\n");push(body);push("\nendobj\n")};
+ obj(1,"<< /Type /Catalog /Pages 2 0 R >>");
+ obj(2,"<< /Type /Pages /Kids ["+pages.map((_,i)=>(3+3*i)+" 0 R").join(" ")+"] /Count "+n+" >>");
+ pages.forEach((pg,i)=>{
+  const pn=3+3*i,cn=pn+1,im=pn+2;
+  obj(pn,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 "+im+" 0 R >> >> /Contents "+cn+" 0 R >>");
+  const cs="q 595.28 0 0 841.89 0 0 cm /Im0 Do Q";
+  obj(cn,"<< /Length "+cs.length+" >>\nstream\n"+cs+"\nendstream");
+  offs[im]=len;
+  push(im+" 0 obj\n<< /Type /XObject /Subtype /Image /Width "+pg.w+" /Height "+pg.h+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+pg.jpeg.length+" >>\nstream\n");
+  push(pg.jpeg);push("\nendstream\nendobj\n");
+ });
+ const total=3+3*n;
+ const xrefPos=len;
+ let x="xref\n0 "+total+"\n0000000000 65535 f \n";
+ for(let k=1;k<total;k++)x+=String(offs[k]).padStart(10,"0")+" 00000 n \n";
+ push(x);
+ push("trailer\n<< /Size "+total+" /Root 1 0 R >>\nstartxref\n"+xrefPos+"\n%%EOF");
+ return new Blob(parts,{type:"application/pdf"});
+}
+async function loadBitmap(blob){
+ try{return await createImageBitmap(blob)}
+ catch(e){
+  return await new Promise((res,rej)=>{const u=URL.createObjectURL(blob);const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u});
+ }
+}
+async function buildLineReport(line,onProgress){
+ const PXW=1400,PXH=1980,MM=PXW/210;           // px per mm, A4
+ const PW=210,PH=297,M=14,CW=PW-2*M;
+ const INK="#1e2832",MUTE="#6e7882",BLUE="#0073bc",OK="#1f8f5f",NO="#c0463e",WARM="#b9770e",PANEL="#eef3f8",RULE="#c9d3dc";
+ const FONT='"Helvetica Neue",Helvetica,Arial,sans-serif';
+ const pdfPages=[];
+ let cv=null,ctx=null,y=0,pageNo=0;
+ const pt=v=>v*0.3528*MM;                       // font points -> px
+ function font(size,bold){ctx.font=(bold?"700 ":"400 ")+pt(size)+"px "+FONT}
+ function T(text,x,yy,o){
+  o=o||{};font(o.size||9.5,o.bold);ctx.fillStyle=o.color||INK;ctx.textAlign=o.align||"left";ctx.textBaseline="alphabetic";
+  let t=String(text==null?"":text);
+  if(o.maxW){while(t.length>1&&ctx.measureText(t).width>o.maxW*MM)t=t.slice(0,-1);}
+  ctx.fillText(t,x*MM,yy*MM);
+ }
+ function wrap(text,maxW,size,bold){
+  font(size,bold);const out=[];
+  String(text).split(/\r?\n/).forEach(par=>{
+   const words=par.split(/\s+/).filter(Boolean);let cur="";
+   if(!words.length){out.push("");return}
+   words.forEach(w=>{
+    const tryLine=cur?cur+" "+w:w;
+    if(ctx.measureText(tryLine).width>maxW*MM&&cur){out.push(cur);cur=w}else cur=tryLine;
+   });
+   out.push(cur);
+  });
+  return out;
+ }
+ function rule(yy,color,w){ctx.strokeStyle=color||RULE;ctx.lineWidth=(w||0.25)*MM;ctx.beginPath();ctx.moveTo(M*MM,yy*MM);ctx.lineTo((PW-M)*MM,yy*MM);ctx.stroke()}
+ async function finishPage(){
+  if(!cv)return;
+  T("RORUN  ·  Line "+line+"  ·  Page "+pageNo,PW/2,PH-8,{size:7.5,color:MUTE,align:"center"});
+  const blob=await new Promise(res=>cv.toBlob(res,"image/jpeg",0.86));
+  pdfPages.push({jpeg:new Uint8Array(await blob.arrayBuffer()),w:PXW,h:PXH});
+  cv=null;ctx=null;
+ }
+ async function newPage(){
+  await finishPage();
+  cv=document.createElement("canvas");cv.width=PXW;cv.height=PXH;ctx=cv.getContext("2d");
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,PXW,PXH);pageNo++;y=M;
+ }
+ async function ensure(h){if(y+h>PH-16)await newPage()}
+
+ await newPage();
+ // header
+ try{
+  const ic=await (await fetch("icon-192.png")).blob();const bm=await loadBitmap(ic);
+  ctx.drawImage(bm,M*MM,y*MM,16*MM,16*MM);
+ }catch(e){}
+ T("Line report",M+20,y+7,{size:18,bold:true});
+ T(line,M+20,y+14.5,{size:14,bold:true,color:BLUE});
+ const who=currentUser&&currentUser.email?currentUser.email:"";
+ T("Generated "+new Date().toLocaleString("en-GB"),PW-M,y+6,{size:8.5,color:MUTE,align:"right"});
+ if(who)T(who,PW-M,y+10.5,{size:8.5,color:MUTE,align:"right"});
+ y+=21;rule(y,BLUE,0.6);y+=6;
+
+ const sets=[["ili","ILI",runs,ILI_G],["clp","CLP/GP",clpRuns,CLP_G]];
+ const listFor=arr=>arr.filter(r=>r.line===line).sort((a,b)=>(a.ts||0)-(b.ts||0));
+ const nIli=listFor(runs).length,nClp=listFor(clpRuns).length;
+ const kindData=KINDS.map(([k,l])=>[k,l,photos.filter(p=>p.line===line&&p.kind===k).sort((a,b)=>a.uploadedAt-b.uploadedAt),pendingPhotos.filter(p=>p.line===line&&p.kind===k)]);
+ const nPh=kindData.reduce((a,x)=>a+x[2].length+x[3].length,0);
+ if(!nIli&&!nClp&&!nPh)return null;
+ T("ILI runs: "+nIli+"    CLP/GP runs: "+nClp+"    Photos: "+nPh,M,y,{size:9,color:MUTE});y+=7;
+
+ const valueOf=(k,t,u,r)=>{
+  if(t==="yn")return r[k]==="y"?"Yes":r[k]==="n"?"No":"";
+  if(t==="num")return r[k]?r[k]+(u?" "+u:""):"";
+  if(t==="dnum")return r[k]?r[k]+" "+(r[k+"-unit"]||u[0]):"";
+  if(t==="calc"){const c=calcText(k,r);return c==="—"?"":c}
+  return r[k]||"";
+ };
+ const prevType=activeType;
+ const colW=CW/2;
+ try{
+  for(const [type,label,arr,groups] of sets){
+   for(const r of listFor(arr)){
+    activeType=type;
+    await ensure(60);
+    // title bar
+    ctx.fillStyle=PANEL;ctx.fillRect(M*MM,y*MM,CW*MM,9*MM);
+    T(label+" RUN"+(r.rnum?"   "+r.rnum:"")+(r.equip?"   ·   "+r.equip:""),M+3,y+6.2,{size:11,bold:true});
+    T(r.complete==="y"?"Complete":"Incomplete",PW-M-3,y+6,{size:9,bold:true,color:r.complete==="y"?OK:NO,align:"right"});
+    y+=13;
+    const dr=r.date_on?r.date_on+(r.date_off&&r.date_off!==r.date_on?" – "+r.date_off:""):"";
+    const meta=[r.project?"Project "+r.project:"",r.client||"",r.operator||"",dr].filter(Boolean).join("   |   ");
+    T(meta,M,y,{size:8.5,color:MUTE,maxW:CW});y+=6;
+    for(const [gname,fields] of groups){
+     const items=[];
+     fields.forEach(([k,l,t,u])=>{
+      if(["project","client","line","rnum","equip","operator","date_on","date_off","notes"].includes(k))return;
+      let v=valueOf(k,t,u,r);
+      if(k==="launched"&&r.launched)v=(r.date_on?r.date_on+"  ":"")+r.launched;
+      if(k==="received"&&r.received)v=(r.date_off?r.date_off+"  ":"")+r.received;
+      if(!v)return;
+      if(k==="avgspeed"&&speedOverExpected(r))v+="  (above expected)";
+      if(k==="distdiff"&&distShort(r))v+="  (short)";
+      items.push([l,v]);
+     });
+     if(!items.length)continue;
+     await ensure(14);
+     T(gname.toUpperCase(),M,y,{size:7.5,bold:true,color:BLUE});y+=1.6;rule(y,RULE);y+=4.6;
+     for(let i=0;i<items.length;i+=2){
+      await ensure(6);
+      [items[i],items[i+1]].forEach((it,j)=>{
+       if(!it)return;const x=M+j*colW;
+       T(it[0],x,y,{size:8.5,color:MUTE,maxW:36});
+       T(it[1],x+38,y,{size:9.5,bold:true,maxW:colW-40});
+      });
+      y+=5.6;
+     }
+     y+=1.5;
+    }
+    if(r.notes){
+     const lines=wrap(r.notes,CW-2,9);
+     await ensure(10+lines.length*4.6);
+     T("NOTES",M,y,{size:7.5,bold:true,color:BLUE});y+=1.6;rule(y,RULE);y+=4.6;
+     lines.forEach(ln=>{T(ln,M+1,y,{size:9});y+=4.6});
+     y+=1.5;
+    }
+    y+=5;
+   }
+  }
+ }finally{activeType=prevType}
+
+ // photos
+ if(nPh){
+  await ensure(40);
+  T("Photos",M,y+5,{size:14,bold:true});y+=9;rule(y,BLUE,0.6);y+=6;
+  const gap=4,cellW=(CW-2*gap)/3;
+  let done=0;
+  for(const [k,label,synced,pend] of kindData){
+   if(!synced.length&&!pend.length)continue;
+   await ensure(cellW+14);
+   T(label+" ("+(synced.length+pend.length)+")",M,y,{size:10.5,bold:true,color:BLUE});y+=5;
+   const items=[];
+   for(const p of synced){
+    try{items.push(await loadBitmap(await fetchPhotoBlob(p)))}catch(e){items.push(null)}
+    done++;if(onProgress)onProgress(done,nPh);
+   }
+   for(const p of pend){try{items.push(await loadBitmap(p.blob))}catch(e){items.push(null)}done++;if(onProgress)onProgress(done,nPh)}
+   for(let i=0;i<items.length;i+=3){
+    const row=items.slice(i,i+3);
+    const dims=row.map(bm=>{
+     if(!bm)return{w:cellW,h:cellW*0.75};
+     let w=cellW,h=cellW*bm.height/bm.width;
+     const maxH=cellW*1.45;if(h>maxH){w=w*maxH/h;h=maxH}
+     return{w,h};
+    });
+    const rowH=Math.max.apply(null,dims.map(d=>d.h));
+    await ensure(rowH+4);
+    row.forEach((bm,j)=>{
+     const x=M+j*(cellW+gap);
+     if(bm)ctx.drawImage(bm,x*MM,y*MM,dims[j].w*MM,dims[j].h*MM);
+     else{ctx.fillStyle=PANEL;ctx.fillRect(x*MM,y*MM,cellW*MM,dims[j].h*MM);T("photo unavailable",x+cellW/2,y+dims[j].h/2,{size:8,color:MUTE,align:"center"})}
+    });
+    y+=rowH+gap;
+   }
+   y+=4;
+  }
+ }
+ await finishPage();
+ return makePdf(pdfPages);
+}
+let reportFile=null,reportUrl=null;
+function closeReport(){$("rep-back").hidden=true}
+$("rep-cancel").onclick=closeReport;
+$("rep-back").addEventListener("click",e=>{if(e.target.id==="rep-back")closeReport()});
+$("rep-share").onclick=async()=>{
+ if(!reportFile)return;
+ try{
+  if(navigator.canShare&&navigator.canShare({files:[reportFile]})){await navigator.share({files:[reportFile],title:reportFile.name,text:reportFile.name.replace(/\.pdf$/i,"")});closeReport();return}
+  toast("Sharing is not available here — use Open / save");
+ }catch(e){if(!e||e.name!=="AbortError")toast("Could not share ("+((e&&(e.name||e.message))||"error")+")")}
+};
+$("rep-open").onclick=()=>{
+ if(!reportFile)return;
+ if(reportUrl)URL.revokeObjectURL(reportUrl);
+ reportUrl=URL.createObjectURL(reportFile);
+ const w=window.open(reportUrl,"_blank");
+ if(!w){const a=document.createElement("a");a.href=reportUrl;a.download=reportFile.name;document.body.appendChild(a);a.click();a.remove()}
+};
+$("pl-pdf").onclick=async()=>{
+ const line=currentLine;if(!line)return;
+ const b=$("pl-pdf");b.disabled=true;
+ const label="📄 PDF report of this line";
+ b.textContent="Building report…";
+ try{
+  const blob=await buildLineReport(line,(d,n)=>{b.textContent="Building report… photos "+d+"/"+n});
+  if(!blob){toast("Nothing to report for this line yet");return}
+  reportFile=new File([blob],"RORUN_"+line+"_report_"+today()+".pdf",{type:"application/pdf"});
+  $("rep-info").textContent=reportFile.name+" · "+(reportFile.size/1048576).toFixed(1)+" MB";
+  $("rep-back").hidden=false;
+ }catch(e){toast("Could not build the report ("+((e&&(e.name||e.message))||"error")+")")}
+ finally{b.disabled=false;b.textContent=label}
+};
+
 setActiveSchema("ili");
 initFormListeners();
+window.addEventListener("online",()=>{if(cloudDb&&currentUser)setStatus("cloud");processPhotoQueue()});
+window.addEventListener("offline",()=>setStatus("local"));
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)processPhotoQueue()});
+setInterval(processPhotoQueue,30000);
+loadPhotoQueue();
 build();fill(lastDefaults());buildSearchFilter();updateCounts();initCloud();show("home");
 </script>
 </body>
