@@ -464,6 +464,24 @@ function renderPhotoLine(line){
  updateMailBtn();
 }
 function kindLabel(k){const x=KINDS.find(a=>a[0]===k);return x?x[1]:k}
+const blobCache=new Map();
+function fetchPhotoBlob(p){
+ const key=p.id||p.url;
+ if(blobCache.has(key))return blobCache.get(key);
+ const pr=(async()=>{
+  let blob=null;
+  try{if(storageRef&&p.id&&String(p.id).indexOf("photos/")===0&&storageRef.child(p.id).getBlob)blob=await storageRef.child(p.id).getBlob()}catch(e){}
+  if(!blob){const r=await fetch(p.url);if(!r.ok)throw new Error("HTTP "+r.status);blob=await r.blob()}
+  return blob;
+ })();
+ blobCache.set(key,pr);
+ pr.catch(()=>blobCache.delete(key));
+ return pr;
+}
+function prefetchLine(line){
+ if(!navigator.share||!line)return;
+ photos.filter(p=>p.line===line&&p.url).forEach(p=>{fetchPhotoBlob(p).catch(()=>{})});
+}
 function updateMailBtn(){
  const b=$("pl-mail"),ba=$("pl-mailall");if(!b)return;
  const line=currentLine;
@@ -472,6 +490,7 @@ function updateMailBtn(){
  b.hidden=!(navigator.share&&n);
  b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
  if(ba){ba.hidden=!(navigator.share&&total);ba.textContent="✉ Email all photos of this line ("+total+")"}
+ prefetchLine(line);
 }
 async function emailPhotos(all){
  const line=currentLine,kind=pendingKind;if(!line||(!all&&!kind))return;
@@ -481,21 +500,19 @@ async function emailPhotos(all){
  if(!items.length)return;
  const btn=$(all?"pl-mailall":"pl-mail");btn.disabled=true;toast("Preparing photos…");
  try{
+  const blobs=await Promise.all(items.map(p=>fetchPhotoBlob(p)));
   const files=[],cnt={};
-  for(let i=0;i<items.length;i++){
-   const p=items[i];let blob=null;
-   try{if(storageRef&&p.id&&String(p.id).indexOf("photos/")===0&&storageRef.child(p.id).getBlob)blob=await storageRef.child(p.id).getBlob()}catch(e){}
-   if(!blob){const r=await fetch(p.url);if(!r.ok)throw new Error("fetch");blob=await r.blob()}
+  items.forEach((p,i)=>{
    cnt[p.kind]=(cnt[p.kind]||0)+1;
-   files.push(new File([blob],line+"_"+p.kind+"_"+cnt[p.kind]+".jpg",{type:"image/jpeg"}));
-  }
+   files.push(new File([blobs[i]],line+"_"+p.kind+"_"+cnt[p.kind]+".jpg",{type:"image/jpeg"}));
+  });
   const subject=line+" — "+(all?"all photos":kindLabel(kind));
   const parts=KINDS.filter(k=>cnt[k[0]]).map(k=>k[1]+" "+cnt[k[0]]).join(", ");
   const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+(all?": "+parts:"")+")";
   if(navigator.canShare&&!navigator.canShare({files})){toast("This device cannot attach photos from the app");return}
   await navigator.share({files:files,title:subject,text:text});
  }catch(e){
-  if(!e||e.name!=="AbortError")toast("Could not prepare photos for email");
+  if(!e||e.name!=="AbortError")toast("Could not prepare photos for email ("+((e&&(e.name||e.message))||"error")+")");
  }finally{btn.disabled=false}
 }
 async function compressImage(file,maxDim,quality){
