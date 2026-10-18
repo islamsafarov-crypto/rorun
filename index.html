@@ -137,9 +137,16 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .readonly-banner{background:var(--warm);color:#1b2a33;padding:10px 14px;border-radius:4px;margin-bottom:12px;font-weight:600;font-size:14px;text-align:center}
 .readonly-banner[hidden]{display:none}
 .readonly-form .yn button,.readonly-form .ut button,.readonly-form #complete,.readonly-form input,.readonly-form select,.readonly-form textarea,.readonly-form .now{pointer-events:none;opacity:.75}
+.splash{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .45s ease}
+.splash.off{opacity:0;pointer-events:none}
+.splash img{width:min(58vw,280px);height:auto;border-radius:22%;box-shadow:0 10px 40px rgba(0,0,0,.45);opacity:0;transform:scale(.94);animation:splashIn .7s ease-out .05s forwards}
+@keyframes splashIn{to{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.splash,.splash img{transition:none;animation:none;opacity:1;transform:none}}
 </style>
 </head>
 <body>
+<div class="splash" id="splash" aria-hidden="true"><img src="icon-512.png" alt=""></div>
+<script>try{if(sessionStorage.getItem("rorunSplash")){document.getElementById("splash").remove()}else{sessionStorage.setItem("rorunSplash","1")}}catch(e){}</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="g-ili" viewBox="0 0 64 64"><g stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"><line x1="3" y1="11" x2="61" y2="11"/><line x1="3" y1="53" x2="61" y2="53"/></g><g transform="translate(-4 0)"><rect x="16" y="26" width="32" height="12" rx="3"/><path d="M10 17 L16 23 V41 L10 47 Z"/><path d="M48 17 L54 23 V41 L48 47 Z"/><rect x="22" y="21" width="5" height="5" rx="1"/><rect x="29.5" y="21" width="5" height="5" rx="1"/><rect x="37" y="21" width="5" height="5" rx="1"/><rect x="22" y="38" width="5" height="5" rx="1"/><rect x="29.5" y="38" width="5" height="5" rx="1"/><rect x="37" y="38" width="5" height="5" rx="1"/><path d="M54 27.5 H56 A4.5 4.5 0 0 1 56 36.5 H54" fill="none" stroke="#fff" stroke-width="2.8"/></g></symbol>
 <symbol id="g-clp" viewBox="0 0 64 64"><g stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"><line x1="3" y1="11" x2="61" y2="11"/><line x1="3" y1="53" x2="61" y2="53"/></g><g transform="translate(-4 0)"><rect x="12" y="27" width="40" height="10" rx="2"/><rect x="8" y="17" width="6" height="30" rx="1.5"/><rect x="16.5" y="17" width="2.5" height="30" rx="1"/><rect x="21.5" y="17" width="2.5" height="30" rx="1"/><rect x="50" y="17" width="6" height="30" rx="1.5"/><rect x="45" y="17" width="2.5" height="30" rx="1"/><rect x="40" y="17" width="2.5" height="30" rx="1"/><path d="M56 27.5 H58 A4.5 4.5 0 0 1 58 36.5 H56" fill="none" stroke="#fff" stroke-width="2.8"/></g></symbol>
@@ -244,6 +251,15 @@ if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
 }
 
+function splashHide(){
+ const el=document.getElementById("splash");if(!el||el.dataset.h)return;
+ el.dataset.h="1";el.classList.add("off");setTimeout(()=>{if(el.parentNode)el.remove()},600);
+}
+function splashReady(){
+ const el=document.getElementById("splash");if(!el)return;
+ setTimeout(splashHide,Math.max(0,800-performance.now()));
+}
+setTimeout(splashHide,Math.max(0,2000-performance.now()));
 const firebaseConfig={
  apiKey:"AIzaSyA0ldmcFtzAGTF1Ms_YE7fQtUHbJRpJEbA",
  authDomain:"rorun-32349.firebaseapp.com",
@@ -359,8 +375,9 @@ async function initCloud(){
   assetsApi=makeAssetsApi();
  }catch(e){cloudDb=null;assetsApi=null}
  $("pl-add").hidden=!assetsApi;
- if(!cloudDb){setStatus("local");return}
+ if(!cloudDb){setStatus("local");splashReady();return}
  firebase.auth().onAuthStateChanged(user=>{
+  splashReady();
   if(user&&user.isAnonymous){
    // Leftover session from the old anonymous-login version — sign it out
    // so the real login screen shows instead.
