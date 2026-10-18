@@ -175,6 +175,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <input type="file" accept="image/*" multiple hidden id="pl-file-input">
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
 <button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
+<button type="button" class="ghost photo-add" id="pl-mailall" hidden></button>
 <div id="pl-sections"></div>
 </section>
 <section id="v-list" hidden>
@@ -464,31 +465,38 @@ function renderPhotoLine(line){
 }
 function kindLabel(k){const x=KINDS.find(a=>a[0]===k);return x?x[1]:k}
 function updateMailBtn(){
- const b=$("pl-mail");if(!b)return;
- const n=currentLine?photos.filter(p=>p.line===currentLine&&p.kind===pendingKind).length:0;
+ const b=$("pl-mail"),ba=$("pl-mailall");if(!b)return;
+ const line=currentLine;
+ const n=line?photos.filter(p=>p.line===line&&p.kind===pendingKind).length:0;
+ const total=line?photos.filter(p=>p.line===line).length:0;
  b.hidden=!(navigator.share&&n);
  b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
+ if(ba){ba.hidden=!(navigator.share&&total);ba.textContent="✉ Email all photos of this line ("+total+")"}
 }
-async function emailPhotos(){
- const line=currentLine,kind=pendingKind;if(!line||!kind)return;
- const items=photos.filter(p=>p.line===line&&p.kind===kind).sort((a,b)=>a.uploadedAt-b.uploadedAt);
+async function emailPhotos(all){
+ const line=currentLine,kind=pendingKind;if(!line||(!all&&!kind))return;
+ const order=KINDS.map(k=>k[0]);
+ const items=photos.filter(p=>p.line===line&&(all||p.kind===kind))
+  .sort((a,b)=>order.indexOf(a.kind)-order.indexOf(b.kind)||a.uploadedAt-b.uploadedAt);
  if(!items.length)return;
- const b=$("pl-mail");b.disabled=true;toast("Preparing photos…");
+ const btn=$(all?"pl-mailall":"pl-mail");btn.disabled=true;toast("Preparing photos…");
  try{
-  const files=[];
+  const files=[],cnt={};
   for(let i=0;i<items.length;i++){
    const p=items[i];let blob=null;
    try{if(storageRef&&p.id&&String(p.id).indexOf("photos/")===0&&storageRef.child(p.id).getBlob)blob=await storageRef.child(p.id).getBlob()}catch(e){}
    if(!blob){const r=await fetch(p.url);if(!r.ok)throw new Error("fetch");blob=await r.blob()}
-   files.push(new File([blob],line+"_"+kind+"_"+(i+1)+".jpg",{type:"image/jpeg"}));
+   cnt[p.kind]=(cnt[p.kind]||0)+1;
+   files.push(new File([blob],line+"_"+p.kind+"_"+cnt[p.kind]+".jpg",{type:"image/jpeg"}));
   }
-  const subject=line+" — "+kindLabel(kind);
-  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+")";
+  const subject=line+" — "+(all?"all photos":kindLabel(kind));
+  const parts=KINDS.filter(k=>cnt[k[0]]).map(k=>k[1]+" "+cnt[k[0]]).join(", ");
+  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+(all?": "+parts:"")+")";
   if(navigator.canShare&&!navigator.canShare({files})){toast("This device cannot attach photos from the app");return}
   await navigator.share({files:files,title:subject,text:text});
  }catch(e){
   if(!e||e.name!=="AbortError")toast("Could not prepare photos for email");
- }finally{b.disabled=false}
+ }finally{btn.disabled=false}
 }
 async function compressImage(file,maxDim,quality){
  maxDim=maxDim||1920;quality=quality||0.8;
@@ -956,7 +964,8 @@ $("pl-kind-tabs").onclick=e=>{
  $("pl-kind-tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
  updateMailBtn();
 };
-$("pl-mail").onclick=emailPhotos;
+$("pl-mail").onclick=()=>emailPhotos(false);
+$("pl-mailall").onclick=()=>emailPhotos(true);
 $("pl-add").onclick=()=>$("pl-file-input").click();
 $("pl-file-input").onchange=e=>{addPhotosForLine(currentLine,pendingKind,e.target.files);e.target.value=""};
 $("pl-sections").addEventListener("click",e=>{
