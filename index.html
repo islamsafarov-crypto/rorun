@@ -174,6 +174,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <div class="photo-kind-tabs" id="pl-kind-tabs"></div>
 <input type="file" accept="image/*" multiple hidden id="pl-file-input">
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
+<button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
 <div id="pl-sections"></div>
 </section>
 <section id="v-list" hidden>
@@ -459,6 +460,35 @@ function renderPhotoLine(line){
    items.map(p=>"<div class='photo-thumb' data-url='"+esc(p.url||"")+"' style=\"background-image:url('"+esc(p.url||"")+"')\"><span class='photo-del' data-id='"+p.id+"'>×</span></div>").join("")+
    "</div></div>";
  }).join("");
+ updateMailBtn();
+}
+function kindLabel(k){const x=KINDS.find(a=>a[0]===k);return x?x[1]:k}
+function updateMailBtn(){
+ const b=$("pl-mail");if(!b)return;
+ const n=currentLine?photos.filter(p=>p.line===currentLine&&p.kind===pendingKind).length:0;
+ b.hidden=!(navigator.share&&n);
+ b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
+}
+async function emailPhotos(){
+ const line=currentLine,kind=pendingKind;if(!line||!kind)return;
+ const items=photos.filter(p=>p.line===line&&p.kind===kind).sort((a,b)=>a.uploadedAt-b.uploadedAt);
+ if(!items.length)return;
+ const b=$("pl-mail");b.disabled=true;toast("Preparing photos…");
+ try{
+  const files=[];
+  for(let i=0;i<items.length;i++){
+   const p=items[i];let blob=null;
+   try{if(storageRef&&p.id&&String(p.id).indexOf("photos/")===0&&storageRef.child(p.id).getBlob)blob=await storageRef.child(p.id).getBlob()}catch(e){}
+   if(!blob){const r=await fetch(p.url);if(!r.ok)throw new Error("fetch");blob=await r.blob()}
+   files.push(new File([blob],line+"_"+kind+"_"+(i+1)+".jpg",{type:"image/jpeg"}));
+  }
+  const subject=line+" — "+kindLabel(kind);
+  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+")";
+  if(navigator.canShare&&!navigator.canShare({files})){toast("This device cannot attach photos from the app");return}
+  await navigator.share({files:files,title:subject,text:text});
+ }catch(e){
+  if(!e||e.name!=="AbortError")toast("Could not prepare photos for email");
+ }finally{b.disabled=false}
 }
 async function compressImage(file,maxDim,quality){
  maxDim=maxDim||1920;quality=quality||0.8;
@@ -924,7 +954,9 @@ $("pl-kind-tabs").onclick=e=>{
  const b=e.target.closest("button");if(!b)return;
  pendingKind=b.dataset.k;
  $("pl-kind-tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+ updateMailBtn();
 };
+$("pl-mail").onclick=emailPhotos;
 $("pl-add").onclick=()=>$("pl-file-input").click();
 $("pl-file-input").onchange=e=>{addPhotosForLine(currentLine,pendingKind,e.target.files);e.target.value=""};
 $("pl-sections").addEventListener("click",e=>{

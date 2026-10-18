@@ -1,0 +1,7 @@
+[
+  {
+    "origin": ["https://islamsafarov-crypto.github.io"],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]
