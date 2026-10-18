@@ -150,6 +150,12 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .pic-warn .pic-warn-msg{display:block}
 .pic-warn .yn{outline:1px solid var(--warm);border-radius:4px}
 .warn-line{color:var(--warm)!important;font-weight:600}
+.actions{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:10px}
+.actions>button{width:auto;margin:0;padding:8px 6px;min-height:40px;font-size:13px;font-weight:600;border-radius:6px;border-width:1px;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+.actions>#complete,.actions>#save,.actions>#rerun,.actions>#delete{grid-column:span 3}
+.actions>#share,.actions>#formphotos,.actions>#formpdf{grid-column:span 2}
+.actions>.photos-btn svg{width:16px;height:16px}
+.actions>#complete{border-width:1px}
 </style>
 </head>
 <body>
@@ -191,7 +197,6 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
 <button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
 <button type="button" class="ghost photo-add" id="pl-mailall" hidden></button>
-<button type="button" class="ghost photo-add" id="pl-pdf" hidden>📄 PDF report of this line</button>
 <div class="pl-pending" id="pl-pending" hidden></div>
 <div id="pl-sections"></div>
 </section>
@@ -486,7 +491,7 @@ function formLine(){const el=$("f-line");return el?el.value.trim().toUpperCase()
 function updateFormPhotoBtn(){
  const b=$("formphotos");if(!b)return;
  const l=formLine(),ok=VALID.line.re.test(l),n=ok?photoCount(l):0;
- b.innerHTML=CAM_SVG+"<span>Photos of this line"+(ok&&n?" ("+n+")":"")+"</span>";
+ b.innerHTML=CAM_SVG+"<span>Photos"+(ok&&n?" ("+n+")":"")+"</span>";
 }
 let photoFrom=null;
 function openPhotoLine(line,from){
@@ -536,8 +541,6 @@ function updateMailBtn(){
  const total=line?photos.filter(p=>p.line===line).length:0;
  b.hidden=!(navigator.share&&n);
  b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
- const pdfb=$("pl-pdf");
- if(pdfb){const hasRuns=!!line&&(runs.some(r=>r.line===line)||clpRuns.some(r=>r.line===line));pdfb.hidden=!(line&&(total||hasRuns||pendingPhotos.some(p=>p.line===line)))}
  if(ba){ba.hidden=!(navigator.share&&total);ba.textContent="✉ Email all photos of this line ("+total+")"}
  prefetchLine(line);
 }
@@ -886,14 +889,22 @@ function build(){
    }
   }
   f.appendChild(fe)});
- const cm=document.createElement("button");cm.type="button";cm.className="toggle-btn";cm.id="complete";cm.setAttribute("aria-pressed","false");cm.textContent="Mark Run Complete";f.appendChild(cm);
- const b=document.createElement("button");b.className="save";b.id="save";b.textContent="Save Run";f.appendChild(b);
- const sh=document.createElement("button");sh.type="button";sh.className="ghost share-btn";sh.id="share";sh.textContent="Share";f.appendChild(sh);
- const ph=document.createElement("button");ph.type="button";ph.className="ghost share-btn photos-btn";ph.id="formphotos";f.appendChild(ph);
- const rr=document.createElement("button");rr.type="button";rr.className="ghost share-btn";rr.id="rerun";rr.textContent="↻ Rerun — same line & technology";rr.hidden=true;f.appendChild(rr);
- const del=document.createElement("button");del.type="button";del.className="ghost danger-btn";del.id="delete";del.textContent="Delete Run";del.hidden=true;f.appendChild(del);
+ const act=document.createElement("div");act.className="actions";
+ const cm=document.createElement("button");cm.type="button";cm.className="toggle-btn";cm.id="complete";cm.setAttribute("aria-pressed","false");cm.textContent="Mark Complete";act.appendChild(cm);
+ const b=document.createElement("button");b.className="save";b.id="save";b.textContent="Save Run";act.appendChild(b);
+ const sh=document.createElement("button");sh.type="button";sh.className="ghost share-btn";sh.id="share";sh.textContent="Share";act.appendChild(sh);
+ const ph=document.createElement("button");ph.type="button";ph.className="ghost share-btn photos-btn";ph.id="formphotos";act.appendChild(ph);
+ const pd=document.createElement("button");pd.type="button";pd.className="ghost share-btn";pd.id="formpdf";pd.textContent="📄 PDF";act.appendChild(pd);
+ const rr=document.createElement("button");rr.type="button";rr.className="ghost share-btn";rr.id="rerun";rr.textContent="↻ Rerun";rr.hidden=true;act.appendChild(rr);
+ const del=document.createElement("button");del.type="button";del.className="ghost danger-btn";del.id="delete";del.textContent="Delete";del.hidden=true;act.appendChild(del);
+ f.appendChild(act);
  $("save").onclick=submit;
  $("share").onclick=openShare;
+ $("formpdf").onclick=()=>{
+  const l=formLine();
+  if(!VALID.line.re.test(l)){toast("Enter a valid Line ID first");return}
+  makeReport(l,$("formpdf"),"📄 PDF");
+ };
  $("formphotos").onclick=()=>{
   const l=formLine();
   if(!VALID.line.re.test(l)){toast("Enter a valid Line ID first");return}
@@ -941,7 +952,7 @@ function initFormListeners(){
    if(!on)y.setAttribute("aria-pressed","true");
    updatePicWarnings();return}
   const c=e.target.closest("#complete");if(c){const on=c.getAttribute("aria-pressed")==="true";
-   c.setAttribute("aria-pressed",String(!on));c.textContent=!on?"✓ Run Complete":"Mark Run Complete";
+   c.setAttribute("aria-pressed",String(!on));c.textContent=!on?"✓ Complete":"Mark Complete";
    if(editId)setCompleteNow(editId,!on);
    return}
   const sg=e.target.closest(".suggest-list button");if(sg){
@@ -999,7 +1010,7 @@ function fill(r){
   else if(t==="calc"){setCalcField(k,r)}
   else{$("f-"+k).value=r[k]||(k==="rnum"?"R":"");if(VALID[k])$("f-"+k).closest(".f").classList.remove("err")}});
  $("complete").setAttribute("aria-pressed",String(r.complete==="y"));
- $("complete").textContent=r.complete==="y"?"✓ Run Complete":"Mark Run Complete";
+ $("complete").textContent=r.complete==="y"?"✓ Complete":"Mark Complete";
  updatePicWarnings();
 }
 function read(){
@@ -1557,20 +1568,18 @@ $("rep-open").onclick=()=>{
  const w=window.open(reportUrl,"_blank");
  if(!w){const a=document.createElement("a");a.href=reportUrl;a.download=reportFile.name;document.body.appendChild(a);a.click();a.remove()}
 };
-$("pl-pdf").onclick=async()=>{
- const line=currentLine;if(!line)return;
- const b=$("pl-pdf");b.disabled=true;
- const label="📄 PDF report of this line";
- b.textContent="Building report…";
+async function makeReport(line,btn,label){
+ if(!line)return;
+ btn.disabled=true;btn.textContent="PDF…";
  try{
-  const blob=await buildLineReport(line,(d,n)=>{b.textContent="Building report… photos "+d+"/"+n});
+  const blob=await buildLineReport(line,(d,n)=>{btn.textContent="PDF "+d+"/"+n});
   if(!blob){toast("Nothing to report for this line yet");return}
   reportFile=new File([blob],"RORUN_"+line+"_report_"+today()+".pdf",{type:"application/pdf"});
   $("rep-info").textContent=reportFile.name+" · "+(reportFile.size/1048576).toFixed(1)+" MB";
   $("rep-back").hidden=false;
  }catch(e){toast("Could not build the report ("+((e&&(e.name||e.message))||"error")+")")}
- finally{b.disabled=false;b.textContent=label}
-};
+ finally{btn.disabled=false;btn.textContent=label}
+}
 
 setActiveSchema("ili");
 initFormListeners();
