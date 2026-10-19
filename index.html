@@ -58,6 +58,10 @@ legend{font-weight:600;padding:0 6px;color:var(--head)}
 input[type=text],input[type=date],input[type=time],input[type=number],textarea,.q{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit}
 .f select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit}
 .calc-display{width:100%;padding:11px 12px;border:1px dashed var(--line);border-radius:4px;background:var(--bg);color:var(--acc-t);font:inherit;font-weight:600;box-sizing:border-box}
+.calc-display.gauge-red,.gauge-line.gauge-red{color:#fff;background:var(--no);border-color:var(--no);border-style:solid}
+.calc-display.gauge-orange,.gauge-line.gauge-orange{color:#1b1b1b;background:var(--warm);border-color:var(--warm);border-style:solid}
+.calc-display.gauge-green,.gauge-line.gauge-green{color:#fff;background:var(--ok);border-color:var(--ok);border-style:solid}
+.gauge-line{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:600;margin-top:4px}
 .calc-display.calc-warn{color:var(--no);border-color:var(--no);border-style:solid}
 .line-item{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:8px;cursor:pointer}
 .line-count{color:var(--mute);font-size:13px}
@@ -156,6 +160,29 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .actions>#share,.actions>#formphotos,.actions>#formpdf{grid-column:span 2}
 .actions>.photos-btn svg{width:16px;height:16px}
 .actions>#complete{border-width:1px}
+.tech-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
+.tech-chips .tech-lbl{color:var(--mute);font-size:12px;margin-right:2px}
+.tech-chips[hidden]{display:none}
+.tech-chips button{padding:6px 11px;border:1px solid var(--line);background:var(--bg);color:var(--mute);border-radius:14px;font:inherit;font-size:12px}
+.tech-chips button[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.tech-title{font-size:12px;font-weight:600;color:var(--mute);margin:8px 0 6px}
+.pl-tools{display:flex;gap:8px;margin:-6px 0 10px}
+.pl-tools[hidden]{display:none}
+.pl-tools .ghost{padding:7px 14px;font-size:13px}
+.pl-tools .ghost[hidden]{display:none}
+.photo-thumb.sel{outline:3px solid var(--acc-t);outline-offset:-3px}
+.sel-mark{position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.photo-thumb.sel .sel-mark{background:var(--acc)}
+.sel-bar{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;gap:6px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
+.sel-bar[hidden]{display:none}
+.sel-bar span{flex:1;font-size:13px;color:var(--mute)}
+.sel-bar button{padding:9px 12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;font:inherit;font-size:13px;font-weight:600}
+.sel-bar button:disabled{opacity:.4}
+body.has-selbar{padding-bottom:84px}
+.pv-tech{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;color:#fff;font-size:13px;max-width:94vw}
+.pv-tech[hidden]{display:none}
+.photo-view-back .pv-tech button{padding:6px 11px;border-radius:14px;font-size:13px;background:transparent}
+.photo-view-back .pv-tech button[aria-pressed="true"]{background:var(--acc);border-color:var(--acc)}
 </style>
 </head>
 <body>
@@ -192,7 +219,9 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 <section id="v-photo-line" hidden>
 <button type="button" class="ghost pl-back" id="pl-back">← Lines</button>
 <h2 class="pl-title" id="pl-title"></h2>
+<div class="pl-tools"><button type="button" class="ghost" id="pl-select" hidden>Select</button><button type="button" class="ghost" id="pl-selall" hidden>Select all</button></div>
 <div class="photo-kind-tabs" id="pl-kind-tabs"></div>
+<div class="tech-chips" id="pl-tech" hidden></div>
 <input type="file" accept="image/*" multiple hidden id="pl-file-input">
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
 <button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
@@ -210,6 +239,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 </section>
 </main>
 <div class="msg" id="msg"></div>
+<div class="sel-bar" id="sel-bar" hidden><span id="sel-count">0 selected</span><button type="button" id="sel-email">✉ Email</button><button type="button" id="sel-pdf">📄 PDF</button><button type="button" id="sel-cancel">Cancel</button></div>
 <div class="sheet-back" id="sheet-back" hidden>
  <div class="sheet">
   <div class="grabber"></div>
@@ -241,6 +271,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 </div>
 <div class="photo-view-back" id="photo-view-back" hidden>
  <img id="photo-view-img" src="">
+ <div class="pv-tech" id="photo-view-tech" hidden></div>
  <button type="button" id="photo-view-close">Close</button>
 </div>
 <div class="sheet-back" id="me-back" hidden>
@@ -311,16 +342,18 @@ const ILI_G=[
 ["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["off","Switched off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
 ["Summary",[["dist","Recorded distance","num","m"],["distdiff","Distance Difference","calc"],["data","Data","dnum",["GB","MB"]],["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
 const CLP_G=[
-["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["operator","Employee","sel",EMPLOYEES],["origid","Original ID","num","mm"],["cdist","Client Info Distance","num","m"]]],
+["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["operator","Employee","sel",EMPLOYEES],["origid","Original ID","num","mm"],["ilimin","ILI Min ID","num","mm"],["cdist","Client Info Distance","num","m"]]],
 ["Before Launch",[["tx","Transmitter","yn"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-run)","yn"],["pl","Pressure launcher","num","bar"]]],
-["Run",[["launched","Launched","time"],["date_on","Date","date"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["minid","Min ID","num","mm"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
-["Summary",[["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["iddiff","ID Difference","calc"],["notes","Notes","area"]]]];
+["Run",[["launched","Launched","time"],["date_on","Date","date"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["minid","Post-run ID","num","mm"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
+["Summary",[["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["iddiff","ID Difference","calc"],["gauge","Gauge plate check","calc"],["notes","Notes","area"]]]];
 let G=ILI_G,F=ILI_G.flatMap(g=>g[1]);
 let activeType="ili",formReadonly=false;
 let runs=[],clpRuns=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false,currentUser=null,listenersAttached=false;
 const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 let pendingPhotos=[];const pendingUrls=new Map();let statusMode="checking";
+const TECH_KINDS=new Set(["prerun","postrun"]);
+const formTech={};let pendingTech="";let selMode=false;const selected=new Set();let viewKey=null;
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
 try{clpRuns=JSON.parse(localStorage.getItem("clpRuns")||"[]")}catch(e){clpRuns=[]}
 const $=id=>document.getElementById(id);
@@ -497,23 +530,71 @@ let photoFrom=null;
 function openPhotoLine(line,from){
  photoFrom=from||null;
  currentLine=line;pendingKind=KINDS[0][0];
+ selMode=false;selected.clear();
+ pendingTech="";
+ if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
  $("pl-title").textContent="Line: "+line;
  $("pl-kind-tabs").innerHTML=KINDS.map(([k,l])=>"<button type='button' data-k='"+k+"' aria-pressed='"+(k===pendingKind)+"'>"+l+"</button>").join("");
  renderPhotoLine(line);
  show("photo-line");
+ updateSelBar();
+}
+function lineTechs(line){
+ const out=[];const add=t=>{if(t&&out.indexOf(t)<0)out.push(t)};
+ runs.concat(clpRuns).filter(r=>r.line===line).sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(r=>add(r.equip));
+ add(formTech[line]);
+ return out;
+}
+function currentTech(line){
+ if(!TECH_KINDS.has(pendingKind))return "";
+ const techs=lineTechs(line);
+ if(!techs.length)return "";
+ return techs.indexOf(pendingTech)>=0?pendingTech:techs[0];
+}
+function renderTechChips(){
+ const box=$("pl-tech");if(!box)return;
+ const techs=currentLine&&TECH_KINDS.has(pendingKind)?lineTechs(currentLine):[];
+ if(!techs.length){box.hidden=true;box.innerHTML="";return}
+ const cur=currentTech(currentLine);
+ box.hidden=false;
+ box.innerHTML="<span class='tech-lbl'>Technology for new photos:</span>"+techs.map(t=>"<button type='button' data-t='"+esc(t)+"' aria-pressed='"+(t===cur)+"'>"+esc(t)+"</button>").join("");
+}
+function allItems(line){
+ const a=photos.filter(p=>p.line===line).map(p=>({key:"s:"+p.id,src:p,pending:false,kind:p.kind,tech:p.tech||"",t:p.uploadedAt||0}));
+ const b=pendingPhotos.filter(p=>p.line===line).map(p=>({key:"q:"+p.qid,src:p,pending:true,kind:p.kind,tech:p.tech||"",t:p.ts||0}));
+ return a.concat(b);
+}
+function itemBlob(it){return it.pending?Promise.resolve(it.src.blob):fetchPhotoBlob(it.src)}
+function techSlug(t){return String(t||"").replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"")}
+function sortItems(items){
+ const order=KINDS.map(k=>k[0]);
+ return items.slice().sort((a,b)=>order.indexOf(a.kind)-order.indexOf(b.kind)||a.tech.localeCompare(b.tech)||a.t-b.t);
+}
+function thumbHtml(it){
+ const url=it.pending?pendingUrl(it.src):(it.src.url||"");
+ const sel=selMode&&selected.has(it.key);
+ const del=selMode?"":"<span class='photo-del' "+(it.pending?"data-q='"+esc(it.src.qid)+"'":"data-id='"+esc(it.src.id)+"'")+">×</span>";
+ const mark=selMode?"<span class='sel-mark'>"+(sel?"✓":"")+"</span>":"";
+ return "<div class='photo-thumb"+(it.pending?" pending":"")+(sel?" sel":"")+"' data-key='"+esc(it.key)+"' data-url='"+esc(url)+"' style=\"background-image:url('"+esc(url)+"')\">"+del+mark+"</div>";
 }
 function renderPhotoLine(line){
- const mine=photos.filter(p=>p.line===line);
+ const mine=allItems(line);
  $("pl-sections").innerHTML=KINDS.map(([k,label])=>{
-  const items=mine.filter(p=>p.kind===k).sort((a,b)=>b.uploadedAt-a.uploadedAt);
-  const pend=pendingPhotos.filter(p=>p.line===line&&p.kind===k);
-  return "<div class='kind-section'><div class='kind-section-title'>"+label+" ("+items.length+")"+(pend.length?" · "+pend.length+" waiting":"")+"</div><div class='photo-grid' data-k='"+k+"'>"+
-   pend.map(p=>"<div class='photo-thumb pending' data-url='"+pendingUrl(p)+"' style=\"background-image:url('"+pendingUrl(p)+"')\"><span class='photo-del' data-q='"+p.qid+"'>×</span></div>").join("")+
-   items.map(p=>"<div class='photo-thumb' data-url='"+esc(p.url||"")+"' style=\"background-image:url('"+esc(p.url||"")+"')\"><span class='photo-del' data-id='"+p.id+"'>×</span></div>").join("")+
-   "</div></div>";
+  const items=mine.filter(x=>x.kind===k).sort((a,b)=>b.t-a.t);
+  const nPend=items.filter(x=>x.pending).length;
+  let body;
+  if(TECH_KINDS.has(k)&&items.length){
+   const groups=[];items.forEach(x=>{if(groups.indexOf(x.tech)<0)groups.push(x.tech)});
+   groups.sort((a,b)=>((a===""?1:0)-(b===""?1:0))||a.localeCompare(b));
+   const titled=groups.length>1||(groups[0]===""&&lineTechs(line).length>0)||groups[0]!=="";
+   body=groups.map(g=>{
+    const gi=items.filter(x=>x.tech===g);
+    return (titled?"<div class='tech-title'>"+(g?esc(g):"No technology")+" ("+gi.length+")</div>":"")+"<div class='photo-grid' data-k='"+k+"'>"+gi.map(thumbHtml).join("")+"</div>";
+   }).join("");
+  }else body="<div class='photo-grid' data-k='"+k+"'>"+items.map(thumbHtml).join("")+"</div>";
+  return "<div class='kind-section'><div class='kind-section-title'>"+label+" ("+items.length+")"+(nPend?" · "+nPend+" waiting":"")+"</div>"+body+"</div>";
  }).join("");
- updateMailBtn();
- updatePendingBanner();
+ updateMailBtn();updatePendingBanner();renderTechChips();updateSelBar();
 }
 function kindLabel(k){const x=KINDS.find(a=>a[0]===k);return x?x[1]:k}
 const blobCache=new Map();
@@ -537,35 +618,71 @@ function prefetchLine(line){
 function updateMailBtn(){
  const b=$("pl-mail"),ba=$("pl-mailall");if(!b)return;
  const line=currentLine;
- const n=line?photos.filter(p=>p.line===line&&p.kind===pendingKind).length:0;
- const total=line?photos.filter(p=>p.line===line).length:0;
- b.hidden=!(navigator.share&&n);
+ const all=line?allItems(line):[];
+ const n=all.filter(x=>x.kind===pendingKind).length;
+ b.hidden=!(navigator.share&&n)||selMode;
  b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
- if(ba){ba.hidden=!(navigator.share&&total);ba.textContent="✉ Email all photos of this line ("+total+")"}
+ if(ba){ba.hidden=!(navigator.share&&all.length)||selMode;ba.textContent="✉ Email all photos of this line ("+all.length+")"}
  prefetchLine(line);
 }
-async function emailPhotos(all){
- const line=currentLine,kind=pendingKind;if(!line||(!all&&!kind))return;
- const order=KINDS.map(k=>k[0]);
- const items=photos.filter(p=>p.line===line&&(all||p.kind===kind))
-  .sort((a,b)=>order.indexOf(a.kind)-order.indexOf(b.kind)||a.uploadedAt-b.uploadedAt);
- if(!items.length)return;
- const btn=$(all?"pl-mailall":"pl-mail");btn.disabled=true;toast("Preparing photos…");
+function summarizeItems(items){
+ const cnt=new Map();
+ sortItems(items).forEach(it=>{const k=kindLabel(it.kind)+(it.tech?" "+it.tech:"");cnt.set(k,(cnt.get(k)||0)+1)});
+ return Array.from(cnt.entries()).map(e=>e[0]+" "+e[1]).join(", ");
+}
+async function emailItems(items,subject,btn){
+ const line=currentLine;if(!line||!items.length)return;
+ items=sortItems(items);
+ if(btn)btn.disabled=true;
+ toast("Preparing photos…");
  try{
-  const blobs=await Promise.all(items.map(p=>fetchPhotoBlob(p)));
+  const blobs=await Promise.all(items.map(itemBlob));
   const files=[],cnt={};
-  items.forEach((p,i)=>{
-   cnt[p.kind]=(cnt[p.kind]||0)+1;
-   files.push(new File([blobs[i]],line+"_"+p.kind+"_"+cnt[p.kind]+".jpg",{type:"image/jpeg"}));
+  items.forEach((it,i)=>{
+   const key=it.kind+"|"+it.tech;cnt[key]=(cnt[key]||0)+1;
+   files.push(new File([blobs[i]],line+"_"+it.kind+(it.tech?"_"+techSlug(it.tech):"")+"_"+cnt[key]+".jpg",{type:"image/jpeg"}));
   });
-  const subject=line+" — "+(all?"all photos":kindLabel(kind));
-  const parts=KINDS.filter(k=>cnt[k[0]]).map(k=>k[1]+" "+cnt[k[0]]).join(", ");
-  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+(all?": "+parts:"")+")";
+  const sum=summarizeItems(items);
+  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+(sum?": "+sum:"")+")";
   if(navigator.canShare&&!navigator.canShare({files})){toast("This device cannot attach photos from the app");return}
   await navigator.share({files:files,title:subject,text:text});
  }catch(e){
   if(!e||e.name!=="AbortError")toast("Could not prepare photos for email ("+((e&&(e.name||e.message))||"error")+")");
- }finally{btn.disabled=false}
+ }finally{if(btn)btn.disabled=false}
+}
+function selectedItems(){return currentLine?allItems(currentLine).filter(x=>selected.has(x.key)):[]}
+function updateSelBar(){
+ const bar=$("sel-bar");if(!bar)return;
+ const total=currentLine?allItems(currentLine).length:0;
+ if(selMode&&!total){selMode=false;selected.clear()}
+ const vis=selMode&&!$("v-photo-line").hidden;
+ bar.hidden=!vis;
+ document.body.classList.toggle("has-selbar",vis);
+ const sb=$("pl-select"),sa=$("pl-selall");
+ if(sb){sb.hidden=!total;sb.textContent=selMode?"Done":"Select"}
+ if(sa){sa.hidden=!selMode;sa.textContent=selected.size>=total&&total?"Select none":"Select all"}
+ $("sel-count").textContent=selected.size+" selected";
+ $("sel-email").disabled=!selected.size||!navigator.share;
+ $("sel-pdf").disabled=!selected.size;
+}
+function setSelMode(on){selMode=!!on;if(!on)selected.clear();if(currentLine)renderPhotoLine(currentLine);else updateSelBar()}
+async function setItemTech(key,tech){
+ const it=currentLine?allItems(currentLine).find(x=>x.key===key):null;if(!it)return;
+ if(it.pending){it.src.tech=tech;try{await QDB.put(it.src)}catch(e){}}
+ else{
+  it.src.tech=tech;
+  if(cloudDb){try{await withTimeout(cloudDb.collection("photos").doc(it.src.id).update({tech:tech}),4000)}catch(e){toast("Could not save the technology")}}
+ }
+ renderPhotoLine(currentLine);renderViewerTech();updatePicWarnings();renderList();
+}
+function renderViewerTech(){
+ const box=$("photo-view-tech");if(!box)return;
+ const it=viewKey&&currentLine?allItems(currentLine).find(x=>x.key===viewKey):null;
+ if(!it||!TECH_KINDS.has(it.kind)){box.hidden=true;box.innerHTML="";return}
+ const opts=lineTechs(currentLine);if(it.tech&&opts.indexOf(it.tech)<0)opts.push(it.tech);
+ if(!opts.length){box.hidden=true;box.innerHTML="";return}
+ box.hidden=false;
+ box.innerHTML="<span>Technology:</span>"+opts.map(t=>"<button type='button' data-t='"+esc(t)+"' aria-pressed='"+(t===it.tech)+"'>"+esc(t)+"</button>").join("");
 }
 async function compressImage(file,maxDim,quality){
  maxDim=maxDim||1920;quality=quality||0.8;
@@ -610,7 +727,11 @@ const QDB={
 };
 function newId(){return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8)}
 function withTimeout(p,ms){return Promise.race([p,new Promise(res=>setTimeout(()=>res("timeout"),ms))])}
-function hasPhoto(line,kind){return !!line&&(photos.some(p=>p.line===line&&p.kind===kind)||pendingPhotos.some(p=>p.line===line&&p.kind===kind))}
+function hasPhoto(line,kind,tech){
+ if(!line)return false;
+ const ok=p=>p.line===line&&p.kind===kind&&(!TECH_KINDS.has(kind)||!tech||!p.tech||p.tech===tech);
+ return photos.some(ok)||pendingPhotos.some(ok);
+}
 function canUploadNow(){return !!(assetsApi&&cloudDb&&currentUser&&navigator.onLine!==false)}
 function pendingUrl(it){let u=pendingUrls.get(it.qid);if(!u){u=URL.createObjectURL(it.blob);pendingUrls.set(it.qid,u)}return u}
 function updatePendingBanner(){
@@ -644,7 +765,7 @@ async function dropPending(qid){
 async function uploadPhotoNow(it){
  const res=await assetsApi.upload(it.blob);
  const id=newId();
- const doc={id,assetId:res.id,url:res.url,line:it.line,kind:it.kind,uploadedAt:Date.now(),hash:it.hash||null};
+ const doc={id,assetId:res.id,url:res.url,line:it.line,kind:it.kind,tech:it.tech||"",uploadedAt:Date.now(),hash:it.hash||null};
  // If the connection drops right here, Firestore keeps the write and sends it later.
  await withTimeout(cloudDb.collection("photos").doc(id).set(doc),8000);
  if(!photos.some(p=>p.id===id))photos.unshift(doc);
@@ -659,14 +780,15 @@ async function processPhotoQueue(){
   for(const item of pendingPhotos.slice()){
    if(!canUploadNow())break;
    if(item.hash&&photos.some(p=>p.line===item.line&&p.kind===item.kind&&p.hash===item.hash)){await dropPending(item.qid);continue}
-   try{await uploadPhotoNow(item);await dropPending(item.qid);sent++;await markPictureTaken(item.line,item.kind)}
+   try{await uploadPhotoNow(item);await dropPending(item.qid);sent++;await markPictureTaken(item.line,item.kind,item.tech)}
    catch(e){break}
   }
  }finally{qRunning=false}
  if(sent)toast(sent+" waiting photo"+(sent>1?"s":"")+" uploaded");
  updatePendingUi();
 }
-async function addPhotosForLine(line,kind,files){
+async function addPhotosForLine(line,kind,files,tech){
+ tech=TECH_KINDS.has(kind)?(tech||""):"";
  const list=Array.from(files||[]);
  if(!list.length)return;
  toast("Adding "+list.length+" photo"+(list.length>1?"s":"")+"…");
@@ -680,24 +802,24 @@ async function addPhotosForLine(line,kind,files){
   if(hash)seen.add(hash);
   let done=false;
   if(canUploadNow()){
-   try{await uploadPhotoNow({line,kind,blob,hash});done=true;okCount++}catch(e){}
+   try{await uploadPhotoNow({line,kind,tech,blob,hash});done=true;okCount++}catch(e){}
   }
-  if(!done){await enqueuePhoto({line,kind,blob,hash});queued++}
+  if(!done){await enqueuePhoto({line,kind,tech,blob,hash});queued++}
   if(!$("v-photo-line").hidden&&currentLine===line)renderPhotoLine(line);
  }
  if(queued)toast(queued+" photo"+(queued>1?"s":"")+" saved on this phone — will upload when online");
  else if(okCount&&dupCount)toast(okCount+" added, "+dupCount+" duplicate"+(dupCount>1?"s":"")+" skipped");
  else if(okCount)toast(okCount+" photo"+(okCount>1?"s":"")+" added");
  else if(dupCount)toast("Already uploaded — skipped "+dupCount+" duplicate"+(dupCount>1?"s":""));
- if(queued){markPictureTaken(line,kind)}
- else if(okCount){await markPictureTaken(line,kind)}
+ if(queued){markPictureTaken(line,kind,tech)}
+ else if(okCount){await markPictureTaken(line,kind,tech)}
  updatePicWarnings();
 }
 const KIND_TO_FIELD={launcher:"lpic",prerun:"toolpic_bl",receiver:"rpic",postrun:"toolpic_run"};
 const PIC_KIND={lpic:"launcher",toolpic_bl:"prerun",rpic:"receiver",toolpic_run:"postrun"};
 function missingPics(r){
  if(!r||!r.line)return [];
- return Object.keys(PIC_KIND).filter(f=>r[f]==="y"&&!hasPhoto(r.line,PIC_KIND[f])).map(f=>kindLabel(PIC_KIND[f]));
+ return Object.keys(PIC_KIND).filter(f=>r[f]==="y"&&!hasPhoto(r.line,PIC_KIND[f],r.equip)).map(f=>kindLabel(PIC_KIND[f]));
 }
 function updatePicWarnings(){
  if(!$("form"))return;
@@ -706,7 +828,8 @@ function updatePicWarnings(){
  Object.keys(PIC_KIND).forEach(f=>{
   const el=document.querySelector("#form [data-k='"+f+"']");if(!el)return;
   const on=el.querySelector("[aria-pressed='true']");
-  const warn=ok&&!!on&&on.dataset.v==="y"&&!hasPhoto(line,PIC_KIND[f]);
+  const eq=document.getElementById("f-equip");
+  const warn=ok&&!!on&&on.dataset.v==="y"&&!hasPhoto(line,PIC_KIND[f],eq?eq.value:"");
   const wrap=el.closest(".f");if(wrap)wrap.classList.toggle("pic-warn",warn);
  });
 }
@@ -718,21 +841,22 @@ function syncPicFromLine(line){
   }
  });
 }
-async function markPictureTaken(line,kind){
+async function markPictureTaken(line,kind,tech){
  const field=KIND_TO_FIELD[kind];
  if(!field||!line)return;
- await markInArr(runs,"runs","ili",line,field);
- await markInArr(clpRuns,"clpRuns","clp",line,field);
+ await markInArr(runs,"runs","ili",line,field,kind,tech);
+ await markInArr(clpRuns,"clpRuns","clp",line,field,kind,tech);
 }
-async function markInArr(arr,collName,type,line,field){
+async function markInArr(arr,collName,type,line,field,kind,tech){
+ const ok=r=>r.line===line&&(!(TECH_KINDS.has(kind)&&tech)||r.equip===tech);
  let i=-1;
  if(editId&&activeType===type){
   const ei=arr.findIndex(x=>x.id===editId);
-  if(ei>-1&&arr[ei].line===line)i=ei;
+  if(ei>-1&&ok(arr[ei]))i=ei;
  }
  if(i===-1){
   i=arr.reduce((best,r,idx)=>{
-   if(r.line!==line)return best;
+   if(!ok(r))return best;
    if(best===-1)return idx;
    return (r.ts||0)>(arr[best].ts||0)?idx:best;
   },-1);
@@ -758,8 +882,8 @@ async function deleteGalleryPhoto(id){
  if(assetsApi){try{await assetsApi.delete(p.assetId)}catch(e){}}
  if(cloudDb){try{await cloudDb.collection("photos").doc(id).delete()}catch(e){}}
 }
-function openPhotoViewer(url){$("photo-view-img").src=url;$("photo-view-back").hidden=false}
-function closePhotoViewer(){$("photo-view-back").hidden=true;$("photo-view-img").src=""}
+function openPhotoViewer(url,key){$("photo-view-img").src=url;$("photo-view-back").hidden=false;viewKey=key||null;renderViewerTech()}
+function closePhotoViewer(){$("photo-view-back").hidden=true;$("photo-view-img").src="";viewKey=null}
 function toast(t){const m=$("msg");m.textContent=t;m.classList.add("on");setTimeout(()=>m.classList.remove("on"),1800)}
 function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function nowT(){const d=new Date();return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
@@ -808,7 +932,19 @@ function idDiffText(r){
  if(!isFinite(o)||!isFinite(m))return "—";
  return (o-m).toFixed(1)+" mm";
 }
+const GAUGE={red:2,orange:5}; // mm margin thresholds (working values)
+function gaugeInfo(r){
+ const lim=parseNum(r.ilimin),post=parseNum(r.minid);
+ if(!isFinite(lim)||!isFinite(post))return null;
+ const m=+(post-lim).toFixed(1);
+ let level,label;
+ if(m<=GAUGE.red){level="red";label=m<0?"Below ILI Min ID - tool will not pass":"Close to ILI limit"}
+ else if(m<=GAUGE.orange){level="orange";label="Attention"}
+ else{level="green";label="OK"}
+ return{margin:m,level,label,text:(m>0?"+":"")+m.toFixed(1)+" mm — "+label};
+}
 function calcText(k,r){
+ if(k==="gauge"){const g=gaugeInfo(r);return g?g.text:"—"}
  if(k==="duration")return durationText(r);
  if(k==="avgspeed")return avgSpeedText(r);
  if(k==="distdiff")return distDiffText(r);
@@ -828,6 +964,7 @@ function setCalcField(k,r){
  el.textContent=calcText(k,r);
  if(k==="avgspeed")el.classList.toggle("calc-warn",speedOverExpected(r));
  if(k==="distdiff")el.classList.toggle("calc-warn",distShort(r));
+ if(k==="gauge"){const g=gaugeInfo(r);["red","orange","green"].forEach(c=>el.classList.toggle("gauge-"+c,!!g&&g.level===c))}
 }
 function refreshCalcFields(){
  const r=read();
@@ -928,7 +1065,7 @@ function nextRunNo(base){
 }
 function startRerun(id){
  const base=activeRunsArr().find(x=>x.id===id);if(!base)return;
- const keys=activeType==="clp"?["project","client","line","equip","operator","origid","cdist"]:["project","client","line","equip","operator","expspeed","cdist"];
+ const keys=activeType==="clp"?["project","client","line","equip","operator","origid","ilimin","cdist"]:["project","client","line","equip","operator","expspeed","cdist"];
  const seed={};keys.forEach(k=>{seed[k]=base[k]||""});
  seed.rnum=nextRunNo(base);
  setActiveSchema(activeType);build();
@@ -978,7 +1115,7 @@ function initFormListeners(){
   if(k==="rnum")maskRnum(e.target);
   if(k&&VALID[k])validateField(k);
   if(k&&SUGGEST_KEYS.includes(k))showSuggestions(k,e.target.value);
-  if(k==="launched"||k==="date_on"||k==="received"||k==="date_off"||k==="dist"||k==="expspeed"||k==="cdist"||k==="origid"||k==="minid")refreshCalcFields()});
+  if(k==="launched"||k==="date_on"||k==="received"||k==="date_off"||k==="dist"||k==="expspeed"||k==="cdist"||k==="origid"||k==="minid"||k==="ilimin")refreshCalcFields()});
 }
 function maskProject(el){
  const caret=el.selectionStart;
@@ -1114,6 +1251,7 @@ function show(v){
  $("main-nav").hidden=v==="home";
  $("t-home").setAttribute("aria-selected",v==="home");$("t-new").setAttribute("aria-selected",v==="new");$("t-list").setAttribute("aria-selected",v==="list");
  $("t-photos").setAttribute("aria-selected",v==="photos"||v==="photo-line");
+ if(v!=="photo-line"&&selMode){selMode=false;selected.clear();updateSelBar()}
  if(v==="list")renderList();
  if(v==="new")updateFormPhotoBtn();
  if(v==="photos"){currentLine=null;renderPhotoLines()}
@@ -1164,18 +1302,34 @@ $("pl-kind-tabs").onclick=e=>{
  const b=e.target.closest("button");if(!b)return;
  pendingKind=b.dataset.k;
  $("pl-kind-tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
- updateMailBtn();
+ updateMailBtn();renderTechChips();
 };
-$("pl-mail").onclick=()=>emailPhotos(false);
-$("pl-mailall").onclick=()=>emailPhotos(true);
+$("pl-mail").onclick=()=>{const l=currentLine,k=pendingKind;emailItems(allItems(l).filter(x=>x.kind===k),l+" — "+kindLabel(k),$("pl-mail"))};
+$("pl-mailall").onclick=()=>{const l=currentLine;emailItems(allItems(l),l+" — all photos",$("pl-mailall"))};
+$("pl-tech").onclick=e=>{const b=e.target.closest("button");if(!b)return;pendingTech=b.dataset.t;renderTechChips()};
+$("pl-select").onclick=()=>setSelMode(!selMode);
+$("pl-selall").onclick=()=>{
+ const all=currentLine?allItems(currentLine):[];
+ if(selected.size>=all.length)selected.clear();else all.forEach(x=>selected.add(x.key));
+ renderPhotoLine(currentLine);
+};
+$("sel-cancel").onclick=()=>setSelMode(false);
+$("sel-email").onclick=()=>{const l=currentLine;emailItems(selectedItems(),l+" — selected photos",$("sel-email"))};
+$("sel-pdf").onclick=()=>{const l=currentLine;makeReport(l,$("sel-pdf"),"📄 PDF",{items:selectedItems()})};
 $("pl-add").onclick=()=>$("pl-file-input").click();
-$("pl-file-input").onchange=e=>{addPhotosForLine(currentLine,pendingKind,e.target.files);e.target.value=""};
+$("pl-file-input").onchange=e=>{addPhotosForLine(currentLine,pendingKind,e.target.files,currentTech(currentLine));e.target.value=""};
 $("pl-sections").addEventListener("click",e=>{
  const d=e.target.closest(".photo-del");if(d){e.stopPropagation();if(d.dataset.q)dropPending(d.dataset.q);else deleteGalleryPhoto(d.dataset.id);return}
- const t=e.target.closest(".photo-thumb");if(t){openPhotoViewer(t.dataset.url);return}
+ const t=e.target.closest(".photo-thumb");if(!t)return;
+ if(selMode){const k=t.dataset.key;if(selected.has(k))selected.delete(k);else selected.add(k);renderPhotoLine(currentLine);return}
+ openPhotoViewer(t.dataset.url,t.dataset.key);
 });
 $("photo-view-back").addEventListener("click",e=>{if(e.target.id==="photo-view-back")closePhotoViewer()});
 $("photo-view-close").onclick=closePhotoViewer;
+$("photo-view-tech").onclick=e=>{
+ const b=e.target.closest("button");if(!b||!viewKey)return;
+ setItemTech(viewKey,b.getAttribute("aria-pressed")==="true"?"":b.dataset.t);
+};
 const SEARCH_FIELDS=[["","All fields"],["project","Project"],["client","Client"],["line","Line ID"],["equip","Technology"],["operator","Employee"]];
 function buildSearchFilter(){
  $("qf").innerHTML=SEARCH_FIELDS.map(([k,l])=>"<option value='"+k+"'>"+l+"</option>").join("");
@@ -1194,7 +1348,7 @@ function renderList(){
  L.innerHTML=res.map(r=>{const dr=r.date_on?esc(r.date_on)+(r.date_off&&r.date_off!==r.date_on?" – "+esc(r.date_off):""):"";
   const editable=canEdit(r);
   const miss=missingPics(r);
-  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?photoBtnHtml(r.line):"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small>"+(miss.length?"<small class='warn-line'>⚠ No "+miss.map(esc).join(", ")+" photo"+(miss.length>1?"s":"")+"</small>":"")+"</div></div>"}).join("")}
+  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?photoBtnHtml(r.line):"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small>"+(activeType==="clp"&&gaugeInfo(r)?"<small class='gauge-line gauge-"+gaugeInfo(r).level+"'>Gauge plate: "+esc(gaugeInfo(r).text)+"</small>":"")+(miss.length?"<small class='warn-line'>⚠ No "+miss.map(esc).join(", ")+" photo"+(miss.length>1?"s":"")+"</small>":"")+"</div></div>"}).join("")}
 function esc(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function shareText(){
  const r=read();
@@ -1203,7 +1357,7 @@ function shareText(){
   if(t==="dnum"){if(r[k])lines.push(l+": "+r[k]+" "+(r[k+"-unit"]||u[0]))}
   else if(t==="num"){if(r[k])lines.push(l+": "+r[k]+(u?" "+u:""))}
   else if(t==="yn"){if(r[k])lines.push(l+": "+(r[k]==="y"?"Yes":"No"))}
-  else if(t==="calc"){const d=calcText(k,r);if(d!=="—")lines.push(l+": "+d+(k==="avgspeed"&&speedOverExpected(r)?" ⚠ above expected":""))}
+  else if(t==="calc"){const d=calcText(k,r);if(d!=="—")lines.push(l+": "+d+(k==="avgspeed"&&speedOverExpected(r)?" ⚠ above expected":"")+(k==="gauge"?({red:" 🔴",orange:" 🟠",green:" 🟢"}[(gaugeInfo(r)||{}).level]||""):""))}
   else if(r[k])lines.push(l+": "+r[k]);
  });
  return lines.join("\n");
@@ -1312,10 +1466,10 @@ const XLSX_COLUMNS_ILI=[
 ];
 const XLSX_COLUMNS_CLP=[
  ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
- ["Technology","equip","text"],["Employee","operator","text"],["Original ID (mm)","origid","number"],["Client Info Distance (m)","cdist","number"],
+ ["Technology","equip","text"],["Employee","operator","text"],["Original ID (mm)","origid","number"],["ILI Min ID (mm)","ilimin","number"],["Client Info Distance (m)","cdist","number"],
  ["Transmitter","tx","yn"],["Launcher Picture","lpic","yn"],["Tool Pictures Pre-run","toolpic_bl","yn"],["Pressure launcher (bar)","pl","number"],
  ["Launched","launched","text"],["Date launch","date_on","text"],
- ["Received","received","text"],["Date receive","date_off","text"],["Pressure receiver (bar)","pr","number"],["Min ID (mm)","minid","number"],
+ ["Received","received","text"],["Date receive","date_off","text"],["Pressure receiver (bar)","pr","number"],["Post-run ID (mm)","minid","number"],
  ["Receiver Picture","rpic","yn"],["Tool Pictures Post-run","toolpic_run","yn"],
  ["Notes","notes","text"],["Complete","complete","yn"]
 ];
@@ -1324,7 +1478,7 @@ function exportXlsx(){
  if(!arr.length){toast("No runs to export yet");return}
  const isClp=activeType==="clp";
  const cols=isClp?XLSX_COLUMNS_CLP:XLSX_COLUMNS_ILI;
- const extraHeaders=["Run duration","Average velocity (m/s)"].concat(isClp?["ID Difference (mm)"]:["Above expected velocity?","Distance Difference (m)"]);
+ const extraHeaders=["Run duration","Average velocity (m/s)"].concat(isClp?["ID Difference (mm)","Margin to ILI Min ID (mm)","Gauge plate status"]:["Above expected velocity?","Distance Difference (m)"]);
  const header=cols.map(c=>c[0]).concat(extraHeaders);
  const rows=arr.map(r=>{
   const row=cols.map(([label,key,kind])=>{
@@ -1340,6 +1494,9 @@ function exportXlsx(){
   if(isClp){
    const idTxt=idDiffText(r);
    row.push(idTxt==="—"?"":parseFloat(idTxt));
+   const g=gaugeInfo(r);
+   row.push(g?g.margin:"");
+   row.push(g?({red:"RED",orange:"ORANGE",green:"GREEN"}[g.level]+" - "+g.label):"");
   }else{
    row.push(speedOverExpected(r)?"Yes":"No");
    const diffTxt=distDiffText(r);
@@ -1387,7 +1544,7 @@ async function loadBitmap(blob){
   return await new Promise((res,rej)=>{const u=URL.createObjectURL(blob);const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u});
  }
 }
-async function buildLineReport(line,onProgress){
+async function buildLineReport(line,onProgress,opts){
  const PXW=1400,PXH=1980,MM=PXW/210;           // px per mm, A4
  const PW=210,PH=297,M=14,CW=PW-2*M;
  const INK="#1e2832",MUTE="#6e7882",BLUE="#0073bc",OK="#1f8f5f",NO="#c0463e",WARM="#b9770e",PANEL="#eef3f8",RULE="#c9d3dc";
@@ -1444,12 +1601,15 @@ async function buildLineReport(line,onProgress){
  y+=21;rule(y,BLUE,0.6);y+=6;
 
  const sets=[["ili","ILI",runs,ILI_G],["clp","CLP/GP",clpRuns,CLP_G]];
- const listFor=arr=>arr.filter(r=>r.line===line).sort((a,b)=>(a.ts||0)-(b.ts||0));
+ const repItems=sortItems(opts&&opts.items?opts.items:allItems(line));
+ const techSet=new Set(repItems.filter(x=>TECH_KINDS.has(x.kind)&&x.tech).map(x=>x.tech));
+ const byTech=!!(opts&&opts.items&&techSet.size);
+ const listFor=arr=>arr.filter(r=>r.line===line&&(!byTech||techSet.has(r.equip))).sort((a,b)=>(a.ts||0)-(b.ts||0));
  const nIli=listFor(runs).length,nClp=listFor(clpRuns).length;
- const kindData=KINDS.map(([k,l])=>[k,l,photos.filter(p=>p.line===line&&p.kind===k).sort((a,b)=>a.uploadedAt-b.uploadedAt),pendingPhotos.filter(p=>p.line===line&&p.kind===k)]);
- const nPh=kindData.reduce((a,x)=>a+x[2].length+x[3].length,0);
+ const nPh=repItems.length;
  if(!nIli&&!nClp&&!nPh)return null;
- T("ILI runs: "+nIli+"    CLP/GP runs: "+nClp+"    Photos: "+nPh,M,y,{size:9,color:MUTE});y+=7;
+ T("ILI runs: "+nIli+"    CLP/GP runs: "+nClp+"    Photos: "+nPh,M,y,{size:9,color:MUTE});y+=(opts&&opts.items?4.5:7);
+ if(opts&&opts.items){T("Report built from "+nPh+" selected photo"+(nPh===1?"":"s")+(byTech?" — runs limited to: "+Array.from(techSet).join(", "):""),M,y,{size:8.5,color:MUTE});y+=6}
 
  const valueOf=(k,t,u,r)=>{
   if(t==="yn")return r[k]==="y"?"Yes":r[k]==="n"?"No":"";
@@ -1483,7 +1643,8 @@ async function buildLineReport(line,onProgress){
       if(!v)return;
       if(k==="avgspeed"&&speedOverExpected(r))v+="  (above expected)";
       if(k==="distdiff"&&distShort(r))v+="  (short)";
-      items.push([l,v]);
+      const gi=k==="gauge"?gaugeInfo(r):null;
+      items.push([l,v,gi?{red:NO,orange:WARM,green:OK}[gi.level]:null]);
      });
      if(!items.length)continue;
      await ensure(14);
@@ -1493,7 +1654,7 @@ async function buildLineReport(line,onProgress){
       [items[i],items[i+1]].forEach((it,j)=>{
        if(!it)return;const x=M+j*colW;
        T(it[0],x,y,{size:8.5,color:MUTE,maxW:36});
-       T(it[1],x+38,y,{size:9.5,bold:true,maxW:colW-40});
+       T(it[1],x+38,y,{size:9.5,bold:true,maxW:colW-40,color:it[2]||undefined});
       });
       y+=5.6;
      }
@@ -1517,16 +1678,27 @@ async function buildLineReport(line,onProgress){
   T("Photos",M,y+5,{size:14,bold:true});y+=9;rule(y,BLUE,0.6);y+=6;
   const gap=4,cellW=(CW-2*gap)/3;
   let done=0;
-  for(const [k,label,synced,pend] of kindData){
-   if(!synced.length&&!pend.length)continue;
+  const sections=[];
+  KINDS.forEach(([k,label])=>{
+   const its=repItems.filter(x=>x.kind===k);
+   if(!its.length)return;
+   if(TECH_KINDS.has(k)){
+    const groups=[];its.forEach(x=>{if(groups.indexOf(x.tech)<0)groups.push(x.tech)});
+    groups.sort((a,b)=>((a===""?1:0)-(b===""?1:0))||a.localeCompare(b));
+    groups.forEach(g=>{
+     const gi=its.filter(x=>x.tech===g);
+     sections.push({title:label+(g?" · "+g:(groups.length>1?" · No technology":""))+" ("+gi.length+")",items:gi});
+    });
+   }else sections.push({title:label+" ("+its.length+")",items:its});
+  });
+  for(const sec of sections){
    await ensure(cellW+14);
-   T(label+" ("+(synced.length+pend.length)+")",M,y,{size:10.5,bold:true,color:BLUE});y+=5;
+   T(sec.title,M,y,{size:10.5,bold:true,color:BLUE});y+=5;
    const items=[];
-   for(const p of synced){
-    try{items.push(await loadBitmap(await fetchPhotoBlob(p)))}catch(e){items.push(null)}
+   for(const it of sec.items){
+    try{items.push(await loadBitmap(await itemBlob(it)))}catch(e){items.push(null)}
     done++;if(onProgress)onProgress(done,nPh);
    }
-   for(const p of pend){try{items.push(await loadBitmap(p.blob))}catch(e){items.push(null)}done++;if(onProgress)onProgress(done,nPh)}
    for(let i=0;i<items.length;i+=3){
     const row=items.slice(i,i+3);
     const dims=row.map(bm=>{
@@ -1568,11 +1740,11 @@ $("rep-open").onclick=()=>{
  const w=window.open(reportUrl,"_blank");
  if(!w){const a=document.createElement("a");a.href=reportUrl;a.download=reportFile.name;document.body.appendChild(a);a.click();a.remove()}
 };
-async function makeReport(line,btn,label){
+async function makeReport(line,btn,label,opts){
  if(!line)return;
  btn.disabled=true;btn.textContent="PDF…";
  try{
-  const blob=await buildLineReport(line,(d,n)=>{btn.textContent="PDF "+d+"/"+n});
+  const blob=await buildLineReport(line,(d,n)=>{btn.textContent="PDF "+d+"/"+n},opts);
   if(!blob){toast("Nothing to report for this line yet");return}
   reportFile=new File([blob],"RORUN_"+line+"_report_"+today()+".pdf",{type:"application/pdf"});
   $("rep-info").textContent=reportFile.name+" · "+(reportFile.size/1048576).toFixed(1)+" MB";
