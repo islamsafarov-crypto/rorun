@@ -183,6 +183,27 @@ body.has-selbar{padding-bottom:84px}
 .pv-tech[hidden]{display:none}
 .photo-view-back .pv-tech button{padding:6px 11px;border-radius:14px;font-size:13px;background:transparent}
 .photo-view-back .pv-tech button[aria-pressed="true"]{background:var(--acc);border-color:var(--acc)}
+.attn{margin:16px 0 0;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.attn[hidden]{display:none}
+.attn-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin-bottom:6px}
+.attn-row{display:flex;justify-content:space-between;align-items:center;width:100%;padding:9px 10px;margin-top:4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px;text-align:left}
+.attn-row b{min-width:26px;text-align:center;padding:2px 8px;border-radius:10px;background:var(--warm);color:#1b1b1b}
+.attn-row.red b{background:var(--no);color:#fff}
+.list-filter{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 10px;padding:8px 12px;border-radius:6px;background:var(--card);border:1px solid var(--warm);font-size:13px}
+.list-filter[hidden]{display:none}
+.list-filter button{padding:5px 10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;font:inherit;font-size:12px}
+.li-main{min-width:0;flex:1}
+.rd-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}
+.rd{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--mute)}
+.rd-green{background:var(--ok)}.rd-orange{background:var(--warm)}.rd-red{background:var(--no)}
+.rd-lbl{font-size:13px;font-weight:600}
+.rd-txt{display:block;width:100%;color:var(--mute);font-size:11px}
+.rd-panel{margin:0 0 12px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:8px}
+.rd-panel .rd-row{margin:0 0 8px}
+.ln-lbl{display:block;font-size:12px;color:var(--mute);margin:4px 0}
+.ln-text{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px;box-sizing:border-box;resize:vertical}
+.ln-form{margin:0 0 12px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:8px}
+.ln-form[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -207,9 +228,10 @@ body.has-selbar{padding-bottom:84px}
  <button type="button" class="home-card" id="home-clp"><svg class="home-glyph" aria-hidden="true"><use href="#g-clp"/></svg><span class="home-label">CLP/GP Runs</span><span class="home-count" id="cnt-clp">0</span></button>
  <button type="button" class="home-card" id="home-photos"><svg class="home-glyph" aria-hidden="true"><use href="#g-ph"/></svg><span class="home-label">Photos</span></button>
 </div>
+<div class="attn" id="attn" hidden></div>
 <img class="home-logo" src="rosen-logo.png" alt="ROSEN">
 </section>
-<section id="v-new" hidden><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
+<section id="v-new" hidden><div class="ln-form" id="ln-form" hidden></div><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
 <section id="v-photos" hidden>
 <div class="bar">
  <input class="q" id="pq" type="search" placeholder="Search Line ID…">
@@ -220,6 +242,7 @@ body.has-selbar{padding-bottom:84px}
 <button type="button" class="ghost pl-back" id="pl-back">← Lines</button>
 <h2 class="pl-title" id="pl-title"></h2>
 <div class="pl-tools"><button type="button" class="ghost" id="pl-select" hidden>Select</button><button type="button" class="ghost" id="pl-selall" hidden>Select all</button></div>
+<div class="rd-panel" id="pl-ready"></div>
 <div class="photo-kind-tabs" id="pl-kind-tabs"></div>
 <div class="tech-chips" id="pl-tech" hidden></div>
 <input type="file" accept="image/*" multiple hidden id="pl-file-input">
@@ -235,6 +258,7 @@ body.has-selbar{padding-bottom:84px}
  <input class="q" id="q" type="search" placeholder="Search…">
  <button class="ghost" id="emailxl">Export to Excel</button>
 </div>
+<div class="list-filter" id="list-filter" hidden></div>
 <div id="list"></div>
 </section>
 </main>
@@ -249,6 +273,14 @@ body.has-selbar{padding-bottom:84px}
   <a id="sh-mail" href="#"><span class="ic" style="background:#0072C6">O</span>Outlook / Email</a>
   <button type="button" id="sh-copy"><span class="ic" style="background:#64757f">C</span>Copy text (for any other app)</button>
   <button type="button" class="cancel" id="sh-cancel">Cancel</button>
+ </div>
+</div>
+<div class="sheet-back" id="dup-back" hidden>
+ <div class="sheet">
+  <div class="grabber"></div>
+  <h3 id="dup-title">This run already exists</h3>
+  <button type="button" id="dup-ok" style="justify-content:center;font-weight:600">Save anyway</button>
+  <button type="button" class="cancel" id="dup-cancel">Cancel</button>
  </div>
 </div>
 <div class="sheet-back" id="del-back" hidden>
@@ -353,6 +385,8 @@ const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 let pendingPhotos=[];const pendingUrls=new Map();let statusMode="checking";
 const TECH_KINDS=new Set(["prerun","postrun"]);
+let lineNotes={};try{lineNotes=JSON.parse(localStorage.getItem("lineNotes")||"{}")||{}}catch(e){}
+let listFilter=null;
 const formTech={};let pendingTech="";let selMode=false;const selected=new Set();let viewKey=null;
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
 try{clpRuns=JSON.parse(localStorage.getItem("clpRuns")||"[]")}catch(e){clpRuns=[]}
@@ -476,6 +510,13 @@ function attachCloudListeners(){
   if(!$("v-list").hidden&&activeType==="clp")renderList();
   if(!$("v-photos").hidden)renderPhotoLines();
  },err=>{toast("Sync interrupted — showing last known data")});
+ cloudDb.collection("lineNotes").onSnapshot(snap=>{
+  const m={};snap.docs.forEach(d=>{m[d.id]=d.data()});
+  lineNotes=Object.assign({},lineNotes,m);
+  try{localStorage.setItem("lineNotes",JSON.stringify(lineNotes))}catch(e){}
+  updateLineNoteForm();
+  if(!$("v-photo-line").hidden&&currentLine&&document.activeElement.id!=="pl-note"){const b=$("pl-note");if(b)b.value=(lineNotes[currentLine]&&lineNotes[currentLine].text)||""}
+ },err=>{});
  cloudDb.collection("photos").orderBy("uploadedAt","desc").limit(1000).onSnapshot(snap=>{
   photos=snap.docs.map(d=>d.data());
   cleanupOldPhotos();
@@ -483,7 +524,7 @@ function attachCloudListeners(){
   if(!$("v-photo-line").hidden&&currentLine)renderPhotoLine(currentLine);
   if(!$("v-list").hidden)renderList();
   updateFormPhotoBtn();
-  updatePicWarnings();
+  updatePicWarnings();renderAttention();
  },err=>{toast("Photo sync interrupted")});
 }
 async function cleanupOldPhotos(){
@@ -495,6 +536,54 @@ async function cleanupOldPhotos(){
   try{await assetsApi.delete(p.assetId)}catch(e){}
   try{await cloudDb.collection("photos").doc(p.id).delete()}catch(e){}
  }
+}
+function lineReadiness(line){
+ const clp=clpRuns.filter(r=>r.line===line),ili=runs.filter(r=>r.line===line);
+ const latest={};clp.forEach(r=>{const t=r.equip||"";if(!latest[t]||(r.ts||0)>(latest[t].ts||0))latest[t]=r});
+ const rank={green:0,orange:1,red:2};let g=null;
+ Object.keys(latest).forEach(t=>{const x=gaugeInfo(latest[t]);if(x&&(!g||rank[x.level]>rank[g.level]))g=x});
+ const done=clp.length>0&&clp.every(r=>r.complete==="y");
+ let level,label;
+ if(!clp.length){level="none";label="No CLP/GP run yet"}
+ else if(g&&g.level==="red"){level="red";label=g.margin<0?"Tool will not pass":"Close to ILI limit"}
+ else if(!g){level="orange";label="Gauge plate data missing"}
+ else if(g.level==="orange"){level="orange";label="Check gauge plate"}
+ else if(!done){level="orange";label="CLP/GP run incomplete"}
+ else{level="green";label="Ready for ILI"}
+ const parts=["CLP/GP: "+(clp.length?clp.length+" run"+(clp.length>1?"s":"")+(done?" ✓":" (incomplete)"):"none"),"Gauge plate: "+(g?g.text:"no data"),"ILI: "+(ili.length?ili.length+" run"+(ili.length>1?"s":""):"none")];
+ return{level,label,parts};
+}
+function readyHtml(line){
+ const rd=lineReadiness(line);
+ return "<span class='rd rd-"+rd.level+"'></span><span class='rd-lbl'>"+esc(rd.label)+"</span><small class='rd-txt'>"+rd.parts.map(esc).join(" → ")+"</small>";
+}
+function noteBoxHtml(line,id){
+ const t=(lineNotes[line]&&lineNotes[line].text)||"";
+ return "<label class='ln-lbl' for='"+id+"'>Line note — shared for all runs on this line</label><textarea class='ln-text' id='"+id+"' rows='2' placeholder='e.g. restriction at km 3, bend near launcher…'>"+esc(t)+"</textarea>";
+}
+function bindNoteBox(id,getLine){
+ const el=$(id);if(!el)return;
+ el.onchange=()=>{const l=getLine();if(l)saveLineNote(l,el.value)};
+}
+async function saveLineNote(line,text){
+ text=String(text||"").trim();
+ const doc={line,text,ts:Date.now(),by:currentUser?currentUser.email:""};
+ lineNotes[line]=doc;
+ try{localStorage.setItem("lineNotes",JSON.stringify(lineNotes))}catch(e){}
+ if(cloudDb){
+  try{const w=await withTimeout(cloudDb.collection("lineNotes").doc(line).set(doc),4000);toast(w==="timeout"?"Note saved on this phone — will sync when online":"Note saved")}
+  catch(e){toast("Note saved locally — cloud sync failed (check Firestore rules)")}
+ }else toast("Note saved");
+ updateLineNoteForm();
+}
+function updateLineNoteForm(){
+ const box=$("ln-form");if(!box)return;
+ const l=formLine();
+ if(!l||!VALID.line.re.test(l)){box.hidden=true;box.innerHTML="";return}
+ const act=document.activeElement;
+ if(act&&act.id==="ln-form-text")return;
+ box.hidden=false;box.innerHTML=noteBoxHtml(l,"ln-form-text");
+ bindNoteBox("ln-form-text",formLine);
 }
 function allLines(){
  const set=new Set();
@@ -511,7 +600,7 @@ function renderPhotoLines(){
  if(!lines.length){L.innerHTML="<div class='empty'>"+(all.length?"No matches found":"No lines yet. Add a run first.")+"</div>";return}
  L.innerHTML=lines.map(l=>{
   const n=photos.filter(p=>p.line===l).length;
-  return "<div class='line-item' data-line='"+esc(l)+"'><b>"+esc(l)+"</b><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
+  return "<div class='line-item' data-line='"+esc(l)+"'><div class='li-main'><b>"+esc(l)+"</b><div class='rd-row'>"+readyHtml(l)+"</div></div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
  }).join("");
 }
 const CAM_SVG="<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3.5 8.5h3l1.6-2.5h7.8l1.6 2.5h3v10.5h-17z'/><circle cx='12' cy='13.5' r='3.6'/></svg>";
@@ -522,6 +611,7 @@ function photoBtnHtml(line){
 }
 function formLine(){const el=$("f-line");return el?el.value.trim().toUpperCase():""}
 function updateFormPhotoBtn(){
+ updateLineNoteForm();
  const b=$("formphotos");if(!b)return;
  const l=formLine(),ok=VALID.line.re.test(l),n=ok?photoCount(l):0;
  b.innerHTML=CAM_SVG+"<span>Photos"+(ok&&n?" ("+n+")":"")+"</span>";
@@ -534,6 +624,8 @@ function openPhotoLine(line,from){
  pendingTech="";
  if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
  $("pl-title").textContent="Line: "+line;
+ $("pl-ready").innerHTML="<div class='rd-row'>"+readyHtml(line)+"</div>"+noteBoxHtml(line,"pl-note");
+ bindNoteBox("pl-note",()=>currentLine);
  $("pl-kind-tabs").innerHTML=KINDS.map(([k,l])=>"<button type='button' data-k='"+k+"' aria-pressed='"+(k===pendingKind)+"'>"+l+"</button>").join("");
  renderPhotoLine(line);
  show("photo-line");
@@ -696,6 +788,24 @@ async function compressImage(file,maxDim,quality){
  canvas.getContext("2d").drawImage(bitmap,0,0,w,h);
  return await new Promise(res=>canvas.toBlob(res,"image/jpeg",quality));
 }
+function stampText(line,kind,tech){
+ const d=new Date(),pad=n=>String(n).padStart(2,"0");
+ return line+"  ·  "+kindLabel(kind)+(tech?" · "+tech:"")+"  ·  "+pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes());
+}
+async function stampBlob(blob,text){
+ const bm=await createImageBitmap(blob);
+ const w=bm.width,h=bm.height;
+ const c=document.createElement("canvas");c.width=w;c.height=h;
+ const x=c.getContext("2d");x.drawImage(bm,0,0);
+ const fs=Math.max(16,Math.round(Math.min(w,h)/34));
+ x.font="600 "+fs+"px -apple-system,Segoe UI,Roboto,Arial,sans-serif";
+ x.textBaseline="middle";
+ const pad=Math.round(fs*0.5),tw=Math.min(x.measureText(text).width,w-pad*2);
+ const bh=fs+pad*1.2;
+ x.fillStyle="rgba(0,0,0,0.55)";x.fillRect(0,h-bh,tw+pad*2,bh);
+ x.fillStyle="#fff";x.fillText(text,pad,h-bh/2,w-pad*2);
+ return await new Promise(res=>c.toBlob(b=>res(b||blob),"image/jpeg",0.85));
+}
 async function blobSha256(blob){
  const buf=await blob.arrayBuffer();
  const digest=await crypto.subtle.digest("SHA-256",buf);
@@ -800,6 +910,7 @@ async function addPhotosForLine(line,kind,files,tech){
   const hash=await blobSha256(blob).catch(()=>null);
   if(hash&&seen.has(hash)){dupCount++;continue}
   if(hash)seen.add(hash);
+  try{blob=await stampBlob(blob,stampText(line,kind,tech))}catch(e){}
   let done=false;
   if(canUploadNow()){
    try{await uploadPhotoNow({line,kind,tech,blob,hash});done=true;okCount++}catch(e){}
@@ -1173,6 +1284,16 @@ async function setCompleteNow(id,val){
  }
  renderList();
 }
+let dupResolve=null;
+function askDup(r){
+ $("dup-title").textContent="A run "+(r.rnum||"")+(r.equip?" · "+r.equip:"")+" for line "+r.line+" already exists. Save a duplicate?";
+ $("dup-back").hidden=false;
+ return new Promise(res=>{dupResolve=res});
+}
+function closeDup(v){$("dup-back").hidden=true;if(dupResolve){const f=dupResolve;dupResolve=null;f(v)}}
+$("dup-ok").onclick=()=>closeDup(true);
+$("dup-cancel").onclick=()=>closeDup(false);
+$("dup-back").addEventListener("click",e=>{if(e.target.id==="dup-back")closeDup(false)});
 async function submit(){
  const arr=activeRunsArr();
  if(editId){
@@ -1188,6 +1309,10 @@ async function submit(){
  if(!validateField("project")){toast("Project doesn't match the required format");$("f-project").focus();return}
  if(r.line&&!validateField("line")){toast("Line ID doesn't match the required format");$("f-line").focus();return}
  if(r.rnum&&!validateField("rnum")){toast("Run No. doesn't match the required format");$("f-rnum").focus();return}
+ if(r.line&&r.rnum){
+  const dup=arr.find(x=>x.id!==editId&&x.line===r.line&&(x.equip||"")===(r.equip||"")&&(x.rnum||"")===r.rnum);
+  if(dup&&!(await askDup(r)))return;
+ }
  if(editId){
   const i=arr.findIndex(x=>x.id===editId);
   r.id=editId;r.ts=i>-1?arr[i].ts:Date.now();
@@ -1252,6 +1377,7 @@ function show(v){
  $("t-home").setAttribute("aria-selected",v==="home");$("t-new").setAttribute("aria-selected",v==="new");$("t-list").setAttribute("aria-selected",v==="list");
  $("t-photos").setAttribute("aria-selected",v==="photos"||v==="photo-line");
  if(v!=="photo-line"&&selMode){selMode=false;selected.clear();updateSelBar()}
+ if(v==="home")renderAttention();
  if(v==="list")renderList();
  if(v==="new")updateFormPhotoBtn();
  if(v==="photos"){currentLine=null;renderPhotoLines()}
@@ -1269,7 +1395,37 @@ function goNew(){
  fill(lastDefaults());
  show("new");
 }
+const ATTN=[
+ ["incomplete","Incomplete runs",r=>r.complete!=="y"],
+ ["nophoto","“Yes” without photo",r=>missingPics(r).length>0],
+ ["red","Gauge plate RED",r=>(gaugeInfo(r)||{}).level==="red",true]
+];
+function renderAttention(){
+ const box=$("attn");if(!box)return;
+ const rows=[];
+ [["ili","ILI",runs],["clp","CLP/GP",clpRuns]].forEach(([type,name,arr])=>{
+  ATTN.forEach(([f,label,pred,clpOnly])=>{
+   if(clpOnly&&type!=="clp")return;
+   const n=arr.filter(pred).length;
+   if(n)rows.push("<button type='button' class='attn-row"+(f==="red"?" red":"")+"' data-type='"+type+"' data-f='"+f+"'><span>"+name+" · "+label+"</span><b>"+n+"</b></button>");
+  });
+ });
+ box.hidden=!rows.length;
+ box.innerHTML=rows.length?"<div class='attn-title'>Needs attention</div>"+rows.join(""):"";
+}
+function applyListFilter(res){
+ if(!listFilter||listFilter.type!==activeType)return res;
+ const a=ATTN.find(x=>x[0]===listFilter.f);return a?res.filter(a[2]):res;
+}
+function renderListFilter(){
+ const b=$("list-filter");if(!b)return;
+ if(!listFilter||listFilter.type!==activeType){b.hidden=true;b.innerHTML="";return}
+ const a=ATTN.find(x=>x[0]===listFilter.f);
+ b.hidden=false;b.innerHTML="<span>Filter: "+esc(a?a[1]:"")+"</span><button type='button' id='lf-clear'>✕ Show all</button>";
+ $("lf-clear").onclick=()=>{listFilter=null;renderList()};
+}
 function updateCounts(){
+ renderAttention();
  $("cnt-ili").textContent=String(runs.length);
  $("cnt-clp").textContent=String(clpRuns.length);
  const label=activeType==="clp"?"CLP/GP":"ILI";
@@ -1292,8 +1448,9 @@ $("t-home").onclick=()=>show("home");
 $("t-new").onclick=goNew;
 $("t-list").onclick=()=>show("list");
 $("t-photos").onclick=()=>show("photos");
-$("home-ili").onclick=()=>enterSection("ili");
-$("home-clp").onclick=()=>enterSection("clp");
+$("home-ili").onclick=()=>{listFilter=null;enterSection("ili")};
+$("home-clp").onclick=()=>{listFilter=null;enterSection("clp")};
+$("attn").onclick=e=>{const b=e.target.closest(".attn-row");if(!b)return;listFilter={type:b.dataset.type,f:b.dataset.f};enterSection(b.dataset.type)};
 $("home-photos").onclick=()=>show("photos");
 $("pq").oninput=renderPhotoLines;
 $("photo-lines").onclick=e=>{const it=e.target.closest(".line-item");if(it)openPhotoLine(it.dataset.line)};
@@ -1338,11 +1495,13 @@ function renderList(){
  const q=$("q").value.trim().toLowerCase();
  const qf=$("qf").value;
  const src=activeRunsArr();
- const res=src.filter(r=>{
+ const res1=src.filter(r=>{
   if(!q)return true;
   if(qf)return String(r[qf]||"").toLowerCase().includes(q);
   return F.some(([k])=>String(r[k]||"").toLowerCase().includes(q));
  });
+ renderListFilter();
+ const res=applyListFilter(res1);
  const L=$("list");
  if(!res.length){L.innerHTML="<div class='empty'>"+(src.length?"No matches found":"No runs yet. Add your first one on the New Run tab.")+"</div>";return}
  L.innerHTML=res.map(r=>{const dr=r.date_on?esc(r.date_on)+(r.date_off&&r.date_off!==r.date_on?" – "+esc(r.date_off):""):"";
@@ -1611,6 +1770,21 @@ async function buildLineReport(line,onProgress,opts){
  T("ILI runs: "+nIli+"    CLP/GP runs: "+nClp+"    Photos: "+nPh,M,y,{size:9,color:MUTE});y+=(opts&&opts.items?4.5:7);
  if(opts&&opts.items){T("Report built from "+nPh+" selected photo"+(nPh===1?"":"s")+(byTech?" — runs limited to: "+Array.from(techSet).join(", "):""),M,y,{size:8.5,color:MUTE});y+=6}
 
+ {
+  const rd=lineReadiness(line);
+  const col={green:OK,orange:WARM,red:NO,none:MUTE}[rd.level];
+  await ensure(16);
+  T("Line readiness: "+rd.label,M,y,{size:9.5,bold:true,color:col});y+=5;
+  T(rd.parts.join("   →   "),M,y,{size:8.5,color:MUTE,maxW:CW});y+=6;
+  const lnote=(lineNotes[line]&&lineNotes[line].text)||"";
+  if(lnote){
+   const ls=wrap(lnote,CW-2,9);
+   await ensure(10+ls.length*4.6);
+   T("LINE NOTE",M,y,{size:7.5,bold:true,color:BLUE});y+=1.6;rule(y,RULE);y+=4.6;
+   ls.forEach(ln=>{T(ln,M+1,y,{size:9});y+=4.6});
+   y+=3;
+  }
+ }
  const valueOf=(k,t,u,r)=>{
   if(t==="yn")return r[k]==="y"?"Yes":r[k]==="n"?"No":"";
   if(t==="num")return r[k]?r[k]+(u?" "+u:""):"";
