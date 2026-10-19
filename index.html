@@ -200,10 +200,6 @@ body.has-selbar{padding-bottom:84px}
 .rd-txt{display:block;width:100%;color:var(--mute);font-size:11px}
 .rd-panel{margin:0 0 12px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:8px}
 .rd-panel .rd-row{margin:0 0 8px}
-.ln-lbl{display:block;font-size:12px;color:var(--mute);margin:4px 0}
-.ln-text{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px;box-sizing:border-box;resize:vertical}
-.ln-form{margin:0 0 12px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:8px}
-.ln-form[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -231,7 +227,7 @@ body.has-selbar{padding-bottom:84px}
 <div class="attn" id="attn" hidden></div>
 <img class="home-logo" src="rosen-logo.png" alt="ROSEN">
 </section>
-<section id="v-new" hidden><div class="ln-form" id="ln-form" hidden></div><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
+<section id="v-new" hidden><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
 <section id="v-photos" hidden>
 <div class="bar">
  <input class="q" id="pq" type="search" placeholder="Search Line ID…">
@@ -385,7 +381,6 @@ const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 let pendingPhotos=[];const pendingUrls=new Map();let statusMode="checking";
 const TECH_KINDS=new Set(["prerun","postrun"]);
-let lineNotes={};try{lineNotes=JSON.parse(localStorage.getItem("lineNotes")||"{}")||{}}catch(e){}
 let listFilter=null;
 const formTech={};let pendingTech="";let selMode=false;const selected=new Set();let viewKey=null;
 try{runs=JSON.parse(localStorage.getItem("runs")||"[]")}catch(e){runs=[]}
@@ -510,13 +505,6 @@ function attachCloudListeners(){
   if(!$("v-list").hidden&&activeType==="clp")renderList();
   if(!$("v-photos").hidden)renderPhotoLines();
  },err=>{toast("Sync interrupted — showing last known data")});
- cloudDb.collection("lineNotes").onSnapshot(snap=>{
-  const m={};snap.docs.forEach(d=>{m[d.id]=d.data()});
-  lineNotes=Object.assign({},lineNotes,m);
-  try{localStorage.setItem("lineNotes",JSON.stringify(lineNotes))}catch(e){}
-  updateLineNoteForm();
-  if(!$("v-photo-line").hidden&&currentLine&&document.activeElement.id!=="pl-note"){const b=$("pl-note");if(b)b.value=(lineNotes[currentLine]&&lineNotes[currentLine].text)||""}
- },err=>{});
  cloudDb.collection("photos").orderBy("uploadedAt","desc").limit(1000).onSnapshot(snap=>{
   photos=snap.docs.map(d=>d.data());
   cleanupOldPhotos();
@@ -557,34 +545,6 @@ function readyHtml(line){
  const rd=lineReadiness(line);
  return "<span class='rd rd-"+rd.level+"'></span><span class='rd-lbl'>"+esc(rd.label)+"</span><small class='rd-txt'>"+rd.parts.map(esc).join(" → ")+"</small>";
 }
-function noteBoxHtml(line,id){
- const t=(lineNotes[line]&&lineNotes[line].text)||"";
- return "<label class='ln-lbl' for='"+id+"'>Line note — shared for all runs on this line</label><textarea class='ln-text' id='"+id+"' rows='2' placeholder='e.g. restriction at km 3, bend near launcher…'>"+esc(t)+"</textarea>";
-}
-function bindNoteBox(id,getLine){
- const el=$(id);if(!el)return;
- el.onchange=()=>{const l=getLine();if(l)saveLineNote(l,el.value)};
-}
-async function saveLineNote(line,text){
- text=String(text||"").trim();
- const doc={line,text,ts:Date.now(),by:currentUser?currentUser.email:""};
- lineNotes[line]=doc;
- try{localStorage.setItem("lineNotes",JSON.stringify(lineNotes))}catch(e){}
- if(cloudDb){
-  try{const w=await withTimeout(cloudDb.collection("lineNotes").doc(line).set(doc),4000);toast(w==="timeout"?"Note saved on this phone — will sync when online":"Note saved")}
-  catch(e){toast("Note saved locally — cloud sync failed (check Firestore rules)")}
- }else toast("Note saved");
- updateLineNoteForm();
-}
-function updateLineNoteForm(){
- const box=$("ln-form");if(!box)return;
- const l=formLine();
- if(!l||!VALID.line.re.test(l)){box.hidden=true;box.innerHTML="";return}
- const act=document.activeElement;
- if(act&&act.id==="ln-form-text")return;
- box.hidden=false;box.innerHTML=noteBoxHtml(l,"ln-form-text");
- bindNoteBox("ln-form-text",formLine);
-}
 function allLines(){
  const set=new Set();
  runs.forEach(r=>{if(r.line)set.add(r.line)});
@@ -611,7 +571,6 @@ function photoBtnHtml(line){
 }
 function formLine(){const el=$("f-line");return el?el.value.trim().toUpperCase():""}
 function updateFormPhotoBtn(){
- updateLineNoteForm();
  const b=$("formphotos");if(!b)return;
  const l=formLine(),ok=VALID.line.re.test(l),n=ok?photoCount(l):0;
  b.innerHTML=CAM_SVG+"<span>Photos"+(ok&&n?" ("+n+")":"")+"</span>";
@@ -624,8 +583,7 @@ function openPhotoLine(line,from){
  pendingTech="";
  if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
  $("pl-title").textContent="Line: "+line;
- $("pl-ready").innerHTML="<div class='rd-row'>"+readyHtml(line)+"</div>"+noteBoxHtml(line,"pl-note");
- bindNoteBox("pl-note",()=>currentLine);
+ $("pl-ready").innerHTML="<div class='rd-row'>"+readyHtml(line)+"</div>";
  $("pl-kind-tabs").innerHTML=KINDS.map(([k,l])=>"<button type='button' data-k='"+k+"' aria-pressed='"+(k===pendingKind)+"'>"+l+"</button>").join("");
  renderPhotoLine(line);
  show("photo-line");
@@ -1776,14 +1734,6 @@ async function buildLineReport(line,onProgress,opts){
   await ensure(16);
   T("Line readiness: "+rd.label,M,y,{size:9.5,bold:true,color:col});y+=5;
   T(rd.parts.join("   →   "),M,y,{size:8.5,color:MUTE,maxW:CW});y+=6;
-  const lnote=(lineNotes[line]&&lineNotes[line].text)||"";
-  if(lnote){
-   const ls=wrap(lnote,CW-2,9);
-   await ensure(10+ls.length*4.6);
-   T("LINE NOTE",M,y,{size:7.5,bold:true,color:BLUE});y+=1.6;rule(y,RULE);y+=4.6;
-   ls.forEach(ln=>{T(ln,M+1,y,{size:9});y+=4.6});
-   y+=3;
-  }
  }
  const valueOf=(k,t,u,r)=>{
   if(t==="yn")return r[k]==="y"?"Yes":r[k]==="n"?"No":"";
