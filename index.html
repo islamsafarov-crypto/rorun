@@ -206,6 +206,10 @@ body.has-selbar{padding-bottom:84px}
  #rot-lock p{margin:10px 0 0}
  body>*:not(#rot-lock){visibility:hidden}
 }
+.upd-bar{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:9000;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;background:var(--acc);color:var(--acc-ink);box-shadow:0 4px 16px rgba(0,0,0,.35);font-size:14px}
+.upd-bar[hidden]{display:none}
+.upd-bar span{flex:1;font-weight:600}
+.upd-bar button{padding:7px 12px;border:1px solid rgba(255,255,255,.7);background:transparent;color:inherit;border-radius:6px;font:inherit;font-size:13px;font-weight:600}
 </style>
 </head>
 <body>
@@ -265,6 +269,7 @@ body.has-selbar{padding-bottom:84px}
 <div id="list"></div>
 </section>
 </main>
+<div class="upd-bar" id="upd-bar" hidden><span>A new version is available</span><button type="button" id="upd-go">Update</button><button type="button" id="upd-later" aria-label="Later">✕</button></div>
 <div class="msg" id="msg"></div>
 <div class="sel-bar" id="sel-bar" hidden><span id="sel-count">0 selected</span><button type="button" id="sel-email">✉ Email</button><button type="button" id="sel-pdf">📄 PDF</button><button type="button" id="sel-cancel">Cancel</button></div>
 <div class="sheet-back" id="sheet-back" hidden>
@@ -338,9 +343,33 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
+const APP_VERSION="v17";
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
 }
+let updDismissed=false;
+async function checkForUpdate(){
+ if(updDismissed||!navigator.onLine)return;
+ try{
+  const r=await fetch("index.html?v="+Date.now(),{cache:"no-store"});
+  if(!r.ok)return;
+  const m=/const APP_VERSION="([^"]+)"/.exec(await r.text());
+  if(m&&m[1]!==APP_VERSION){const b=document.getElementById("upd-bar");if(b)b.hidden=false}
+ }catch(e){}
+}
+async function applyUpdate(){
+ try{if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}}catch(e){}
+ try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(x=>x.update().catch(()=>{})))}}catch(e){}
+ location.reload();
+}
+window.addEventListener("load",()=>{
+ setTimeout(checkForUpdate,3000);
+ const g=document.getElementById("upd-go"),l=document.getElementById("upd-later");
+ if(g)g.onclick=applyUpdate;
+ if(l)l.onclick=()=>{updDismissed=true;document.getElementById("upd-bar").hidden=true};
+});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkForUpdate()});
+setInterval(checkForUpdate,10*60*1000);
 
 function splashHide(){
  const el=document.getElementById("splash");if(!el||el.dataset.h)return;

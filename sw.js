@@ -1,4 +1,4 @@
-const CACHE = "rorun-shell-v16";
+const CACHE = "rorun-shell-v17";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -32,6 +32,8 @@ self.addEventListener("fetch", (e) => {
   // (Firebase, Google Fonts, etc.) goes straight to the network so
   // live data is never served stale.
   if (url.origin !== location.origin) return;
+  // Version probes from the page always go straight to the network.
+  if (url.searchParams.has("v")) return;
 
   const isPage = e.request.mode === "navigate" || e.request.destination === "document";
 
@@ -40,7 +42,7 @@ self.addEventListener("fetch", (e) => {
     // immediately whenever there's a connection. Falls back to the
     // cached copy only when offline.
     e.respondWith(
-      fetch(e.request)
+      fetch(new Request(e.request.url, { cache: "no-cache" }))
         .then((resp) => {
           if (resp && resp.ok) {
             const copy = resp.clone();
