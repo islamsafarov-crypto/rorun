@@ -210,6 +210,7 @@ body.has-selbar{padding-bottom:84px}
 .upd-bar[hidden]{display:none}
 .upd-bar span{flex:1;font-weight:600}
 .upd-bar button{padding:7px 12px;border:1px solid rgba(255,255,255,.7);background:transparent;color:inherit;border-radius:6px;font:inherit;font-size:13px;font-weight:600}
+.app-ver{text-align:center;color:var(--mute);font-size:12px;margin:2px 0 10px}
 </style>
 </head>
 <body>
@@ -319,6 +320,7 @@ body.has-selbar{padding-bottom:84px}
   <div class="grabber"></div>
   <h3>Account</h3>
   <div class="me-info" id="whoami"></div>
+  <div class="app-ver" id="app-ver"></div>
   <button type="button" id="me-logout" style="justify-content:center;color:var(--no);border-color:var(--no);font-weight:600">Sign out</button>
   <button type="button" class="cancel" id="me-cancel">Close</button>
  </div>
@@ -344,6 +346,7 @@ body.has-selbar{padding-bottom:84px}
 
 <script>
 const APP_VERSION="v18";
+window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
 }
