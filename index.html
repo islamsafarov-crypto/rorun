@@ -200,9 +200,16 @@ body.has-selbar{padding-bottom:84px}
 .rd-txt{display:block;width:100%;color:var(--mute);font-size:11px}
 .rd-panel{margin:0 0 12px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:8px}
 .rd-panel .rd-row{margin:0 0 8px}
+#rot-lock{display:none}
+@media (orientation:landscape) and (max-height:500px){
+ #rot-lock{display:flex;position:fixed;inset:0;z-index:99999;align-items:center;justify-content:center;text-align:center;background:#05090e;color:#9fb0c0;font:600 16px -apple-system,Segoe UI,Roboto,Arial,sans-serif}
+ #rot-lock p{margin:10px 0 0}
+ body>*:not(#rot-lock){visibility:hidden}
+}
 </style>
 </head>
 <body>
+<div id="rot-lock" aria-hidden="true"><div><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg><p>Rotate your phone back to portrait</p></div></div>
 <div class="splash" id="splash" aria-hidden="true"><img src="icon-512.png" alt=""></div>
 <script>try{if(sessionStorage.getItem("rorunSplash")){document.getElementById("splash").remove()}else{sessionStorage.setItem("rorunSplash","1")}}catch(e){}</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
