@@ -35,7 +35,9 @@ nav button[aria-selected="true"]{background:var(--acc);color:var(--acc-ink);bord
 .brand-o{display:inline-block;width:.74em;height:.74em;border-radius:50%;border:.15em solid currentColor;position:relative;margin:0 .01em;box-sizing:border-box;flex:none}
 .brand-o::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-42%,-50%);width:0;height:0;border-style:solid;border-width:.15em 0 .15em .24em;border-color:transparent transparent transparent #d7182f}
 .home-grid{display:grid;gap:14px;margin-top:6px}
-.home-logo{display:block;max-width:140px;width:36%;margin:34px auto 0;opacity:.55;filter:brightness(0) invert(1)}
+.home-foot{display:grid;grid-template-columns:1fr minmax(0,140px) 1fr;align-items:end;margin-top:34px;column-gap:8px}
+.home-ver{color:var(--mute);font-size:12px;opacity:.8;align-self:end}
+.home-logo{display:block;width:100%;margin:0;opacity:.55;filter:brightness(0) invert(1)}
 .home-card{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:158px;padding:24px 14px;border:0;background:var(--card);color:var(--ink);border-radius:8px;font:inherit}
 .home-glyph{width:58px;height:58px;fill:#fff;display:block}
 .home-label{font-size:21px;font-weight:700}
@@ -237,7 +239,7 @@ body.has-selbar{padding-bottom:84px}
  <button type="button" class="home-card" id="home-photos"><svg class="home-glyph" aria-hidden="true"><use href="#g-ph"/></svg><span class="home-label">Photos</span></button>
 </div>
 <div class="attn" id="attn" hidden></div>
-<img class="home-logo" src="rosen-logo.png" alt="ROSEN">
+<div class="home-foot"><span class="home-ver" id="home-ver"></span><img class="home-logo" src="rosen-logo.png" alt="ROSEN"><span></span></div>
 </section>
 <section id="v-new" hidden><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
 <section id="v-photos" hidden>
@@ -345,8 +347,8 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v18";
-window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION});
+const APP_VERSION="v19";
+window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
 }
