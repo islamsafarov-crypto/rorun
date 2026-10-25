@@ -372,15 +372,15 @@ const ADMIN_UID="QrMEsZfztOaxHhDQnDhK5g6g8wF3";
 const EQUIPMENT=["RoGeo MD","RoGeo XT","RoCorr MFL-A","RoCorr UT","RoCorr MFL-C (AFD)","EMAT"];
 const CLP_TECH=["CLP","GP","HD","FOAM"];
 const ILI_G=[
-["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected velocity","num","m/s"],["cdist","Client Info Distance","num","m"]]],
-["Before Launch",[["on","Switched on","time"],["tx","Transmitter","yn"],["bml","BM L","yn"],["bmdist_bl","BM Distance","num","m"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-run)","yn"],["pl","Pressure launcher","num","bar"]]],
-["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["off","Switched off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
-["Summary",[["dist","Recorded distance","num","m"],["distdiff","Distance Difference","calc"],["data","Data","dnum",["GB","MB"]],["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["notes","Notes","area"]]]];
+["Project",[["project","Project Number","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected Velocity","num","m/s"],["cdist","Distance by Client","num","m"]]],
+["Before Launch",[["on","Switched On","time"],["tx","Transmitter","yn"],["bml","BM L","yn"],["bmdist_bl","BM Distance","num","m"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-Run)","yn"],["pl","Pressure Launcher","num","bar"]]],
+["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure Receiver","num","bar"],["off","Switched Off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-Run)","yn"]]],
+["Summary",[["dist","Recorded Distance","num","m"],["distdiff","Distance Difference","calc"],["data","Data","dnum",["GB","MB"]],["duration","Run Duration","calc"],["avgspeed","Average Velocity","calc"],["notes","Notes","area"]]]];
 const CLP_G=[
-["Project",[["project","Project","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["operator","Employee","sel",EMPLOYEES],["origid","Original ID","num","mm"],["ilimin","ILI Min ID","num","mm"],["cdist","Client Info Distance","num","m"]]],
-["Before Launch",[["tx","Transmitter","yn"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-run)","yn"],["pl","Pressure launcher","num","bar"]]],
-["Run",[["launched","Launched","time"],["date_on","Date","date"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure receiver","num","bar"],["minid","Post-run ID","num","mm"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-run)","yn"]]],
-["Summary",[["duration","Run duration","calc"],["avgspeed","Average velocity","calc"],["iddiff","ID Difference","calc"],["gauge","Gauge plate check","calc"],["notes","Notes","area"]]]];
+["Project",[["project","Project Number","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["operator","Employee","sel",EMPLOYEES],["origid","Original ID","num","mm"],["ilimin","ILI Min ID","num","mm"],["cdist","Distance by Client","num","m"]]],
+["Before Launch",[["tx","Transmitter","yn"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-Run)","yn"],["pl","Pressure Launcher","num","bar"]]],
+["Run",[["launched","Launched","time"],["date_on","Date","date"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure Receiver","num","bar"],["minid","Post-Run ID","num","mm"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-Run)","yn"]]],
+["Summary",[["duration","Run Duration","calc"],["avgspeed","Average Velocity","calc"],["iddiff","ID Difference","calc"],["gauge","Gauge Plate Check","calc"],["notes","Notes","area"]]]];
 let G=ILI_G,F=ILI_G.flatMap(g=>g[1]);
 let activeType="ili",formReadonly=false;
 let runs=[],clpRuns=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,photos=[],currentLine=null,pendingKind=null,cleanupRan=false,currentUser=null,listenersAttached=false;
@@ -1452,7 +1452,7 @@ $("photo-view-tech").onclick=e=>{
  const b=e.target.closest("button");if(!b||!viewKey)return;
  setItemTech(viewKey,b.getAttribute("aria-pressed")==="true"?"":b.dataset.t);
 };
-const SEARCH_FIELDS=[["","All fields"],["project","Project"],["client","Client"],["line","Line ID"],["equip","Technology"],["operator","Employee"]];
+const SEARCH_FIELDS=[["","All fields"],["project","Project Number"],["client","Client"],["line","Line ID"],["equip","Technology"],["operator","Employee"]];
 function buildSearchFilter(){
  $("qf").innerHTML=SEARCH_FIELDS.map(([k,l])=>"<option value='"+k+"'>"+l+"</option>").join("");
 }
@@ -1578,23 +1578,23 @@ $("list").onclick=e=>{
  $("rerun").hidden=false;
  show("new")};
 const XLSX_COLUMNS_ILI=[
- ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
- ["Technology","equip","text"],["Employee","operator","text"],["Expected velocity (m/s)","expspeed","number"],
- ["Client Info Distance (m)","cdist","number"],
- ["Switched on","on","text"],["Transmitter","tx","yn"],["BM L","bml","yn"],["BM Distance launch (m)","bmdist_bl","number"],
- ["Launcher Picture","lpic","yn"],["Tool Pictures Pre-run","toolpic_bl","yn"],["Pressure launcher (bar)","pl","number"],
- ["Launched","launched","text"],["Date launch","date_on","text"],["BM R","bmr","yn"],["BM Distance run (m)","bmdist_run","number"],
- ["Received","received","text"],["Date receive","date_off","text"],["Pressure receiver (bar)","pr","number"],
- ["Switched off","off","text"],["Receiver Picture","rpic","yn"],["Tool Pictures Post-run","toolpic_run","yn"],
- ["Recorded distance (m)","dist","number"],["Data","data","data"],["Notes","notes","text"],["Complete","complete","yn"]
+ ["Project Number","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
+ ["Technology","equip","text"],["Employee","operator","text"],["Expected Velocity (m/s)","expspeed","number"],
+ ["Distance by Client (m)","cdist","number"],
+ ["Switched On","on","text"],["Transmitter","tx","yn"],["BM L","bml","yn"],["BM Distance Launch (m)","bmdist_bl","number"],
+ ["Launcher Picture","lpic","yn"],["Tool Pictures Pre-Run","toolpic_bl","yn"],["Pressure Launcher (bar)","pl","number"],
+ ["Launched","launched","text"],["Date Launch","date_on","text"],["BM R","bmr","yn"],["BM Distance Run (m)","bmdist_run","number"],
+ ["Received","received","text"],["Date Receive","date_off","text"],["Pressure Receiver (bar)","pr","number"],
+ ["Switched Off","off","text"],["Receiver Picture","rpic","yn"],["Tool Pictures Post-Run","toolpic_run","yn"],
+ ["Recorded Distance (m)","dist","number"],["Data","data","data"],["Notes","notes","text"],["Complete","complete","yn"]
 ];
 const XLSX_COLUMNS_CLP=[
- ["Project","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
- ["Technology","equip","text"],["Employee","operator","text"],["Original ID (mm)","origid","number"],["ILI Min ID (mm)","ilimin","number"],["Client Info Distance (m)","cdist","number"],
- ["Transmitter","tx","yn"],["Launcher Picture","lpic","yn"],["Tool Pictures Pre-run","toolpic_bl","yn"],["Pressure launcher (bar)","pl","number"],
- ["Launched","launched","text"],["Date launch","date_on","text"],
- ["Received","received","text"],["Date receive","date_off","text"],["Pressure receiver (bar)","pr","number"],["Post-run ID (mm)","minid","number"],
- ["Receiver Picture","rpic","yn"],["Tool Pictures Post-run","toolpic_run","yn"],
+ ["Project Number","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
+ ["Technology","equip","text"],["Employee","operator","text"],["Original ID (mm)","origid","number"],["ILI Min ID (mm)","ilimin","number"],["Distance by Client (m)","cdist","number"],
+ ["Transmitter","tx","yn"],["Launcher Picture","lpic","yn"],["Tool Pictures Pre-Run","toolpic_bl","yn"],["Pressure Launcher (bar)","pl","number"],
+ ["Launched","launched","text"],["Date Launch","date_on","text"],
+ ["Received","received","text"],["Date Receive","date_off","text"],["Pressure Receiver (bar)","pr","number"],["Post-Run ID (mm)","minid","number"],
+ ["Receiver Picture","rpic","yn"],["Tool Pictures Post-Run","toolpic_run","yn"],
  ["Notes","notes","text"],["Complete","complete","yn"]
 ];
 function exportXlsx(){
@@ -1602,7 +1602,7 @@ function exportXlsx(){
  if(!arr.length){toast("No runs to export yet");return}
  const isClp=activeType==="clp";
  const cols=isClp?XLSX_COLUMNS_CLP:XLSX_COLUMNS_ILI;
- const extraHeaders=["Run duration","Average velocity (m/s)"].concat(isClp?["ID Difference (mm)","Margin to ILI Min ID (mm)","Gauge plate status"]:["Above expected velocity?","Distance Difference (m)"]);
+ const extraHeaders=["Run Duration","Average Velocity (m/s)"].concat(isClp?["ID Difference (mm)","Margin to ILI Min ID (mm)","Gauge Plate Status"]:["Above Expected Velocity?","Distance Difference (m)"]);
  const header=cols.map(c=>c[0]).concat(extraHeaders);
  const rows=arr.map(r=>{
   const row=cols.map(([label,key,kind])=>{
