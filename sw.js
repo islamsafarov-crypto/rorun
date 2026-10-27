@@ -1,4 +1,4 @@
-const CACHE = "rorun-shell-v22";
+const CACHE = "rorun-shell-v23";
 const SHELL_ASSETS = [
   "./",
   "./index.html",

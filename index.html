@@ -347,7 +347,7 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v22";
+const APP_VERSION="v23";
 window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
@@ -1112,7 +1112,7 @@ function fieldInner(k,l,t,u){
  else if(t==="area")h+="<textarea id='f-"+k+"' rows='3'></textarea>";
  else if(t==="sel")h+="<select id='f-"+k+"'><option value=''>Select…</option>"+u.map(o=>"<option value='"+o+"'>"+o+"</option>").join("")+"</select>";
  else if(t==="calc")h+="<div class='calc-display' id='f-"+k+"'>—</div>";
- else h+="<input type='"+(t==="date"?"date":"text")+"' id='f-"+k+"' "+(t==="text"?"autocapitalize='characters' autocomplete='off'":"")+(k==="project"?" inputmode='numeric'":"")+(k==="rnum"?" maxlength='3'":"")+(VALID[k]?" placeholder='"+VALID[k].ex+"'":"")+">";
+ else h+="<input type='"+(t==="date"?"date":"text")+"' id='f-"+k+"' "+(t==="text"?"autocapitalize='characters' autocomplete='off'":"")+(k==="project"||k==="bmsn_l"||k==="bmsn_r"?" inputmode='numeric' pattern='[0-9]*'":"")+(k==="rnum"?" maxlength='3'":"")+(VALID[k]?" placeholder='"+VALID[k].ex+"'":"")+">";
  if(SUGGEST_KEYS.includes(k))h+="<div class='suggest-list' id='sg-"+k+"'></div>";
  if(VALID[k])h+="<div class='hint'>"+VALID[k].hint+"</div>";
  if(k==="toolid")h+="<div class='hint'>Use CAPITAL letters only (e.g. MFLC-12)</div>";
@@ -1223,6 +1223,7 @@ function initFormListeners(){
   if(formReadonly)return;
   const k=e.target.id&&e.target.id.startsWith("f-")?e.target.id.slice(2):null;
   if(k==="line"||k==="toolid")e.target.value=e.target.value.toUpperCase();
+  if(k==="bmsn_l"||k==="bmsn_r")e.target.value=e.target.value.replace(/\D/g,"");
   if(k==="project")maskProject(e.target);
   if(k==="rnum")maskRnum(e.target);
   if(k&&VALID[k])validateField(k);
