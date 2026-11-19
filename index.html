@@ -213,6 +213,15 @@ body.has-selbar{padding-bottom:84px}
 .upd-bar span{flex:1;font-weight:600}
 .upd-bar button{padding:7px 12px;border:1px solid rgba(255,255,255,.7);background:transparent;color:inherit;border-radius:6px;font:inherit;font-size:13px;font-weight:600}
 .app-ver{text-align:center;color:var(--mute);font-size:12px;margin:2px 0 10px}
+.prj-add{display:flex;gap:8px;margin:0 0 10px}
+.prj-add[hidden]{display:none}
+.prj-add input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit;font-size:15px;min-width:0}
+.prj-add button{padding:10px 16px;border:1px solid var(--line);border-radius:6px;background:var(--acc);color:var(--acc-ink);font:inherit;font-weight:600}
+.photo-thumb.pending .cap{bottom:22px;border-radius:0}
+.photo-thumb .cap{position:absolute;left:0;right:0;bottom:0;padding:3px 5px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;line-height:1.25;overflow:hidden;max-height:2.6em;border-radius:0 0 3px 3px}
+#photo-view-cap{width:min(92vw,460px);padding:10px 12px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(255,255,255,.1);color:#fff;font:inherit;font-size:15px}
+#photo-view-cap[hidden]{display:none}
+#photo-view-cap::placeholder{color:rgba(255,255,255,.55)}
 </style>
 </head>
 <body>
@@ -243,6 +252,8 @@ body.has-selbar{padding-bottom:84px}
 </section>
 <section id="v-new" hidden><div class="readonly-banner" id="readonly-banner" hidden>🔒 View only — you can't edit someone else's run</div><form id="form" onsubmit="return false"></form></section>
 <section id="v-photos" hidden>
+<div class="photo-kind-tabs" id="pm-tabs"><button type="button" data-m="lines" aria-pressed="true">Lines</button><button type="button" data-m="projects" aria-pressed="false">Projects</button></div>
+<div class="prj-add" id="prj-add" hidden><input id="prj-input" inputmode="numeric" autocomplete="off" placeholder="New project number 0-0000-00000"><button type="button" id="prj-go">Add</button></div>
 <div class="bar">
  <input class="q" id="pq" type="search" placeholder="Search Line ID…">
 </div>
@@ -259,6 +270,7 @@ body.has-selbar{padding-bottom:84px}
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
 <button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
 <button type="button" class="ghost photo-add" id="pl-mailall" hidden></button>
+<button type="button" class="ghost photo-add" id="pl-pdf" hidden>📄 PDF of all photos</button>
 <div class="pl-pending" id="pl-pending" hidden></div>
 <div id="pl-sections"></div>
 </section>
@@ -315,6 +327,7 @@ body.has-selbar{padding-bottom:84px}
 <div class="photo-view-back" id="photo-view-back" hidden>
  <img id="photo-view-img" src="">
  <div class="pv-tech" id="photo-view-tech" hidden></div>
+ <input type="text" id="photo-view-cap" maxlength="140" placeholder="Caption (optional)" autocomplete="off" hidden>
  <button type="button" id="photo-view-close">Close</button>
 </div>
 <div class="sheet-back" id="me-back" hidden>
@@ -347,7 +360,7 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v23";
+const APP_VERSION="v24";
 window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
@@ -421,6 +434,13 @@ let runs=[],clpRuns=[],editId=null,cloudDb=null,assetsApi=null,storageRef=null,p
 const PHOTO_MAX_AGE_MS=180*24*60*60*1000;
 const KINDS=[["launcher","Launcher"],["receiver","Receiver"],["prerun","Pre-run"],["postrun","Post-run"]];
 let pendingPhotos=[];const pendingUrls=new Map();let statusMode="checking";
+const MOB_KINDS=[["mob","Mobilization"],["demob","Demobilization"]];
+const ALL_KINDS=KINDS.concat(MOB_KINDS);
+let photosMode="lines";
+const isPrj=l=>String(l||"").indexOf("PRJ:")===0;
+const lineTitle=l=>isPrj(l)?"Project "+String(l).slice(4):l;
+const fileLine=l=>isPrj(l)?"PRJ_"+String(l).slice(4):l;
+const kindsFor=l=>isPrj(l)?MOB_KINDS:KINDS;
 const TECH_KINDS=new Set(["prerun","postrun"]);
 let listFilter=null;
 const formTech={};let pendingTech="";let selMode=false;const selected=new Set();let viewKey=null;
@@ -590,10 +610,41 @@ function allLines(){
  const set=new Set();
  runs.forEach(r=>{if(r.line)set.add(r.line)});
  clpRuns.forEach(r=>{if(r.line)set.add(r.line)});
- photos.forEach(p=>{if(p.line)set.add(p.line)});
+ photos.forEach(p=>{if(p.line&&!isPrj(p.line))set.add(p.line)});
  return Array.from(set).sort();
 }
+function allProjects(){
+ const set=new Set();
+ runs.concat(clpRuns).forEach(r=>{if(r.project)set.add(r.project)});
+ photos.forEach(p=>{if(isPrj(p.line))set.add(String(p.line).slice(4))});
+ return Array.from(set).sort().reverse();
+}
+function fmtProject(v){
+ const d=String(v||"").replace(/\D/g,"").slice(0,10);
+ return d.slice(0,1)+(d.length>1?"-"+d.slice(1,5):"")+(d.length>5?"-"+d.slice(5):"");
+}
+function renderProjects(){
+ const q=$("pq").value.trim();
+ const all=allProjects();
+ const list=all.filter(x=>!q||x.includes(q));
+ const L=$("photo-lines");
+ if(!list.length){L.innerHTML="<div class='empty'>"+(all.length?"No matches found":"No projects yet. Add a project number above.")+"</div>";return}
+ L.innerHTML=list.map(x=>{
+  const key="PRJ:"+x;
+  const m=photos.filter(p=>p.line===key&&p.kind==="mob").length,d=photos.filter(p=>p.line===key&&p.kind==="demob").length;
+  const n=m+d;
+  return "<div class='line-item' data-line='"+esc(key)+"'><div class='li-main'><b>"+esc(x)+"</b><div class='rd-row'><small class='rd-txt'>Mobilization "+m+" · Demobilization "+d+"</small></div></div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
+ }).join("");
+}
+function setPhotosMode(m){
+ photosMode=m;
+ document.querySelectorAll("#pm-tabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.m===m)));
+ $("prj-add").hidden=m!=="projects";
+ $("pq").placeholder=m==="projects"?"Search project number…":"Search Line ID…";
+ renderPhotoLines();
+}
 function renderPhotoLines(){
+ if(photosMode==="projects"){renderProjects();return}
  const q=$("pq").value.trim().toUpperCase();
  const all=allLines();
  const lines=all.filter(l=>!q||l.includes(q));
@@ -619,13 +670,15 @@ function updateFormPhotoBtn(){
 let photoFrom=null;
 function openPhotoLine(line,from){
  photoFrom=from||null;
- currentLine=line;pendingKind=KINDS[0][0];
+ currentLine=line;pendingKind=kindsFor(line)[0][0];
  selMode=false;selected.clear();
  pendingTech="";
  if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
- $("pl-title").textContent="Line: "+line;
- $("pl-ready").innerHTML="<div class='rd-row'>"+readyHtml(line)+"</div>";
- $("pl-kind-tabs").innerHTML=KINDS.map(([k,l])=>"<button type='button' data-k='"+k+"' aria-pressed='"+(k===pendingKind)+"'>"+l+"</button>").join("");
+ $("pl-title").textContent=(isPrj(line)?"":"Line: ")+lineTitle(line);
+ $("pl-back").textContent=isPrj(line)?"← Projects":"← Lines";
+ $("pl-ready").hidden=isPrj(line);
+ $("pl-ready").innerHTML=isPrj(line)?"":"<div class='rd-row'>"+readyHtml(line)+"</div>";
+ $("pl-kind-tabs").innerHTML=kindsFor(line).map(([k,l])=>"<button type='button' data-k='"+k+"' aria-pressed='"+(k===pendingKind)+"'>"+l+"</button>").join("");
  renderPhotoLine(line);
  show("photo-line");
  updateSelBar();
@@ -658,19 +711,20 @@ function allItems(line){
 function itemBlob(it){return it.pending?Promise.resolve(it.src.blob):fetchPhotoBlob(it.src)}
 function techSlug(t){return String(t||"").replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"")}
 function sortItems(items){
- const order=KINDS.map(k=>k[0]);
+ const order=ALL_KINDS.map(k=>k[0]);
  return items.slice().sort((a,b)=>order.indexOf(a.kind)-order.indexOf(b.kind)||a.tech.localeCompare(b.tech)||a.t-b.t);
 }
+function capHtml(it){const c=it.src.caption||"";return c?"<span class='cap'>"+esc(c)+"</span>":""}
 function thumbHtml(it){
  const url=it.pending?pendingUrl(it.src):(it.src.url||"");
  const sel=selMode&&selected.has(it.key);
  const del=selMode?"":"<span class='photo-del' "+(it.pending?"data-q='"+esc(it.src.qid)+"'":"data-id='"+esc(it.src.id)+"'")+">×</span>";
  const mark=selMode?"<span class='sel-mark'>"+(sel?"✓":"")+"</span>":"";
- return "<div class='photo-thumb"+(it.pending?" pending":"")+(sel?" sel":"")+"' data-key='"+esc(it.key)+"' data-url='"+esc(url)+"' style=\"background-image:url('"+esc(url)+"')\">"+del+mark+"</div>";
+ return "<div class='photo-thumb"+(it.pending?" pending":"")+(sel?" sel":"")+"' data-key='"+esc(it.key)+"' data-url='"+esc(url)+"' style=\"background-image:url('"+esc(url)+"')\">"+del+mark+capHtml(it)+"</div>";
 }
 function renderPhotoLine(line){
  const mine=allItems(line);
- $("pl-sections").innerHTML=KINDS.map(([k,label])=>{
+ $("pl-sections").innerHTML=kindsFor(line).map(([k,label])=>{
   const items=mine.filter(x=>x.kind===k).sort((a,b)=>b.t-a.t);
   const nPend=items.filter(x=>x.pending).length;
   let body;
@@ -687,7 +741,7 @@ function renderPhotoLine(line){
  }).join("");
  updateMailBtn();updatePendingBanner();renderTechChips();updateSelBar();
 }
-function kindLabel(k){const x=KINDS.find(a=>a[0]===k);return x?x[1]:k}
+function kindLabel(k){const x=ALL_KINDS.find(a=>a[0]===k);return x?x[1]:k}
 const blobCache=new Map();
 function fetchPhotoBlob(p){
  const key=p.id||p.url;
@@ -713,6 +767,7 @@ function updateMailBtn(){
  const n=all.filter(x=>x.kind===pendingKind).length;
  b.hidden=!(navigator.share&&n)||selMode;
  b.textContent="✉ Email "+kindLabel(pendingKind)+" photos ("+n+")";
+ const pb=$("pl-pdf");if(pb)pb.hidden=!(line&&isPrj(line)&&all.length)||selMode;
  if(ba){ba.hidden=!(navigator.share&&all.length)||selMode;ba.textContent="✉ Email all photos of this line ("+all.length+")"}
  prefetchLine(line);
 }
@@ -731,10 +786,11 @@ async function emailItems(items,subject,btn){
   const files=[],cnt={};
   items.forEach((it,i)=>{
    const key=it.kind+"|"+it.tech;cnt[key]=(cnt[key]||0)+1;
-   files.push(new File([blobs[i]],line+"_"+it.kind+(it.tech?"_"+techSlug(it.tech):"")+"_"+cnt[key]+".jpg",{type:"image/jpeg"}));
+   files.push(new File([blobs[i]],fileLine(line)+"_"+it.kind+(it.tech?"_"+techSlug(it.tech):"")+"_"+cnt[key]+".jpg",{type:"image/jpeg"}));
   });
   const sum=summarizeItems(items);
-  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+(sum?": "+sum:"")+")";
+  const caps=items.map((it,i)=>it.src.caption?files[i].name.replace(/\.jpg$/,"")+": "+it.src.caption:"").filter(Boolean);
+  const text=subject+" ("+files.length+" photo"+(files.length>1?"s":"")+(sum?": "+sum:"")+")"+(caps.length?"\n\n"+caps.join("\n"):"");
   if(navigator.canShare&&!navigator.canShare({files})){toast("This device cannot attach photos from the app");return}
   await navigator.share({files:files,title:subject,text:text});
  }catch(e){
@@ -757,6 +813,22 @@ function updateSelBar(){
  $("sel-pdf").disabled=!selected.size;
 }
 function setSelMode(on){selMode=!!on;if(!on)selected.clear();if(currentLine)renderPhotoLine(currentLine);else updateSelBar()}
+async function setItemCaption(key,text){
+ const it=currentLine?allItems(currentLine).find(x=>x.key===key):null;if(!it)return;
+ text=String(text||"").trim().slice(0,140);
+ if((it.src.caption||"")===text)return;
+ it.src.caption=text;
+ if(it.pending){try{await QDB.put(it.src)}catch(e){}}
+ else if(cloudDb){
+  try{await withTimeout(cloudDb.collection("photos").doc(it.src.id).update({caption:text}),4000)}catch(e){toast("Could not save the caption")}
+ }
+ renderPhotoLine(currentLine);
+}
+function renderViewerCap(){
+ const box=$("photo-view-cap");if(!box)return;
+ const it=viewKey&&currentLine?allItems(currentLine).find(x=>x.key===viewKey):null;
+ box.hidden=!it;box.value=it?(it.src.caption||""):"";
+}
 async function setItemTech(key,tech){
  const it=currentLine?allItems(currentLine).find(x=>x.key===key):null;if(!it)return;
  if(it.pending){it.src.tech=tech;try{await QDB.put(it.src)}catch(e){}}
@@ -788,6 +860,7 @@ async function compressImage(file,maxDim,quality){
  return await new Promise(res=>canvas.toBlob(res,"image/jpeg",quality));
 }
 function stampText(line,kind,tech){
+ line=lineTitle(line);
  const d=new Date(),pad=n=>String(n).padStart(2,"0");
  return line+"  ·  "+kindLabel(kind)+(tech?" · "+tech:"")+"  ·  "+pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes());
 }
@@ -874,7 +947,7 @@ async function dropPending(qid){
 async function uploadPhotoNow(it){
  const res=await assetsApi.upload(it.blob);
  const id=newId();
- const doc={id,assetId:res.id,url:res.url,line:it.line,kind:it.kind,tech:it.tech||"",uploadedAt:Date.now(),hash:it.hash||null};
+ const doc={id,assetId:res.id,url:res.url,line:it.line,kind:it.kind,tech:it.tech||"",caption:it.caption||"",uploadedAt:Date.now(),hash:it.hash||null};
  // If the connection drops right here, Firestore keeps the write and sends it later.
  await withTimeout(cloudDb.collection("photos").doc(id).set(doc),8000);
  if(!photos.some(p=>p.id===id))photos.unshift(doc);
@@ -992,7 +1065,7 @@ async function deleteGalleryPhoto(id){
  if(assetsApi){try{await assetsApi.delete(p.assetId)}catch(e){}}
  if(cloudDb){try{await cloudDb.collection("photos").doc(id).delete()}catch(e){}}
 }
-function openPhotoViewer(url,key){$("photo-view-img").src=url;$("photo-view-back").hidden=false;viewKey=key||null;renderViewerTech()}
+function openPhotoViewer(url,key){$("photo-view-img").src=url;$("photo-view-back").hidden=false;viewKey=key||null;renderViewerTech();renderViewerCap()}
 function closePhotoViewer(){$("photo-view-back").hidden=true;$("photo-view-img").src="";viewKey=null}
 function toast(t){const m=$("msg");m.textContent=t;m.classList.add("on");setTimeout(()=>m.classList.remove("on"),1800)}
 function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -1455,6 +1528,13 @@ $("home-clp").onclick=()=>{listFilter=null;enterSection("clp")};
 $("attn").onclick=e=>{const b=e.target.closest(".attn-row");if(!b)return;listFilter={type:b.dataset.type,f:b.dataset.f};enterSection(b.dataset.type)};
 $("home-photos").onclick=()=>show("photos");
 $("pq").oninput=renderPhotoLines;
+$("pm-tabs").onclick=e=>{const b=e.target.closest("button");if(b)setPhotosMode(b.dataset.m)};
+$("prj-input").oninput=e=>{e.target.value=fmtProject(e.target.value)};
+$("prj-go").onclick=()=>{
+ const v=$("prj-input").value.trim();
+ if(!VALID.project.re.test(v)){toast("Enter a valid project number (0-0000-00000)");return}
+ $("prj-input").value="";openPhotoLine("PRJ:"+v);
+};
 $("photo-lines").onclick=e=>{const it=e.target.closest(".line-item");if(it)openPhotoLine(it.dataset.line)};
 $("pl-back").onclick=()=>{currentLine=null;show(photoFrom||"photos")};
 $("pl-kind-tabs").onclick=e=>{
@@ -1463,17 +1543,18 @@ $("pl-kind-tabs").onclick=e=>{
  $("pl-kind-tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
  updateMailBtn();renderTechChips();
 };
-$("pl-mail").onclick=()=>{const l=currentLine,k=pendingKind;emailItems(allItems(l).filter(x=>x.kind===k),l+" — "+kindLabel(k),$("pl-mail"))};
-$("pl-mailall").onclick=()=>{const l=currentLine;emailItems(allItems(l),l+" — all photos",$("pl-mailall"))};
+$("pl-mail").onclick=()=>{const l=currentLine,k=pendingKind;emailItems(allItems(l).filter(x=>x.kind===k),lineTitle(l)+" — "+kindLabel(k),$("pl-mail"))};
+$("pl-mailall").onclick=()=>{const l=currentLine;emailItems(allItems(l),lineTitle(l)+" — all photos",$("pl-mailall"))};
 $("pl-tech").onclick=e=>{const b=e.target.closest("button");if(!b)return;pendingTech=b.dataset.t;renderTechChips()};
 $("pl-select").onclick=()=>setSelMode(!selMode);
+$("pl-pdf").onclick=()=>{const l=currentLine;makeReport(l,$("pl-pdf"),"📄 PDF of all photos")};
 $("pl-selall").onclick=()=>{
  const all=currentLine?allItems(currentLine):[];
  if(selected.size>=all.length)selected.clear();else all.forEach(x=>selected.add(x.key));
  renderPhotoLine(currentLine);
 };
 $("sel-cancel").onclick=()=>setSelMode(false);
-$("sel-email").onclick=()=>{const l=currentLine;emailItems(selectedItems(),l+" — selected photos",$("sel-email"))};
+$("sel-email").onclick=()=>{const l=currentLine;emailItems(selectedItems(),lineTitle(l)+" — selected photos",$("sel-email"))};
 $("sel-pdf").onclick=()=>{const l=currentLine;makeReport(l,$("sel-pdf"),"📄 PDF",{items:selectedItems()})};
 $("pl-add").onclick=()=>$("pl-file-input").click();
 $("pl-file-input").onchange=e=>{addPhotosForLine(currentLine,pendingKind,e.target.files,currentTech(currentLine));e.target.value=""};
@@ -1484,7 +1565,12 @@ $("pl-sections").addEventListener("click",e=>{
  openPhotoViewer(t.dataset.url,t.dataset.key);
 });
 $("photo-view-back").addEventListener("click",e=>{if(e.target.id==="photo-view-back")closePhotoViewer()});
-$("photo-view-close").onclick=closePhotoViewer;
+$("photo-view-close").onclick=()=>{
+ const b=$("photo-view-cap");
+ if(b&&!b.hidden&&viewKey)setItemCaption(viewKey,b.value);
+ closePhotoViewer();
+};
+$("photo-view-cap").onchange=e=>{if(viewKey)setItemCaption(viewKey,e.target.value)};
 $("photo-view-tech").onclick=e=>{
  const b=e.target.closest("button");if(!b||!viewKey)return;
  setItemTech(viewKey,b.getAttribute("aria-pressed")==="true"?"":b.dataset.t);
@@ -1736,7 +1822,7 @@ async function buildLineReport(line,onProgress,opts){
  function rule(yy,color,w){ctx.strokeStyle=color||RULE;ctx.lineWidth=(w||0.25)*MM;ctx.beginPath();ctx.moveTo(M*MM,yy*MM);ctx.lineTo((PW-M)*MM,yy*MM);ctx.stroke()}
  async function finishPage(){
   if(!cv)return;
-  T("RORUN  ·  Line "+line+"  ·  Page "+pageNo,PW/2,PH-8,{size:7.5,color:MUTE,align:"center"});
+  T("RORUN  ·  "+(isPrj(line)?lineTitle(line):"Line "+line)+"  ·  Page "+pageNo,PW/2,PH-8,{size:7.5,color:MUTE,align:"center"});
   const blob=await new Promise(res=>cv.toBlob(res,"image/jpeg",0.86));
   pdfPages.push({jpeg:new Uint8Array(await blob.arrayBuffer()),w:PXW,h:PXH});
   cv=null;ctx=null;
@@ -1754,8 +1840,8 @@ async function buildLineReport(line,onProgress,opts){
   const ic=await (await fetch("icon-192.png")).blob();const bm=await loadBitmap(ic);
   ctx.drawImage(bm,M*MM,y*MM,16*MM,16*MM);
  }catch(e){}
- T("Line report",M+20,y+7,{size:18,bold:true});
- T(line,M+20,y+14.5,{size:14,bold:true,color:BLUE});
+ T(isPrj(line)?"Project photo report":"Line report",M+20,y+7,{size:18,bold:true});
+ T(isPrj(line)?line.slice(4):line,M+20,y+14.5,{size:14,bold:true,color:BLUE});
  const who=currentUser&&currentUser.email?currentUser.email:"";
  T("Generated "+new Date().toLocaleString("en-GB"),PW-M,y+6,{size:8.5,color:MUTE,align:"right"});
  if(who)T(who,PW-M,y+10.5,{size:8.5,color:MUTE,align:"right"});
@@ -1769,10 +1855,10 @@ async function buildLineReport(line,onProgress,opts){
  const nIli=listFor(runs).length,nClp=listFor(clpRuns).length;
  const nPh=repItems.length;
  if(!nIli&&!nClp&&!nPh)return null;
- T("ILI runs: "+nIli+"    CLP/GP runs: "+nClp+"    Photos: "+nPh,M,y,{size:9,color:MUTE});y+=(opts&&opts.items?4.5:7);
+ T(isPrj(line)?"Photos: "+nPh:"ILI runs: "+nIli+"    CLP/GP runs: "+nClp+"    Photos: "+nPh,M,y,{size:9,color:MUTE});y+=(opts&&opts.items?4.5:7);
  if(opts&&opts.items){T("Report built from "+nPh+" selected photo"+(nPh===1?"":"s")+(byTech?" — runs limited to: "+Array.from(techSet).join(", "):""),M,y,{size:8.5,color:MUTE});y+=6}
 
- {
+ if(!isPrj(line)){
   const rd=lineReadiness(line);
   const col={green:OK,orange:WARM,red:NO,none:MUTE}[rd.level];
   await ensure(16);
@@ -1847,7 +1933,7 @@ async function buildLineReport(line,onProgress,opts){
   const gap=4,cellW=(CW-2*gap)/3;
   let done=0;
   const sections=[];
-  KINDS.forEach(([k,label])=>{
+  ALL_KINDS.forEach(([k,label])=>{
    const its=repItems.filter(x=>x.kind===k);
    if(!its.length)return;
    if(TECH_KINDS.has(k)){
@@ -1876,13 +1962,16 @@ async function buildLineReport(line,onProgress,opts){
      return{w,h};
     });
     const rowH=Math.max.apply(null,dims.map(d=>d.h));
-    await ensure(rowH+4);
+    const caps=row.map((bm,j)=>{const c=(sec.items[i+j].src.caption)||"";return c?wrap(c,cellW,7.5).slice(0,3):[]});
+    const capH=Math.max.apply(null,caps.map(c=>c.length))*3.4;
+    await ensure(rowH+capH+4);
     row.forEach((bm,j)=>{
      const x=M+j*(cellW+gap);
      if(bm)ctx.drawImage(bm,x*MM,y*MM,dims[j].w*MM,dims[j].h*MM);
      else{ctx.fillStyle=PANEL;ctx.fillRect(x*MM,y*MM,cellW*MM,dims[j].h*MM);T("photo unavailable",x+cellW/2,y+dims[j].h/2,{size:8,color:MUTE,align:"center"})}
     });
-    y+=rowH+gap;
+    caps.forEach((c,j)=>{const x=M+j*(cellW+gap);c.forEach((ln,q)=>T(ln,x,y+dims[j].h+3.2+q*3.4,{size:7.5,color:MUTE,maxW:cellW}))});
+    y+=rowH+capH+gap;
    }
    y+=4;
   }
@@ -1914,7 +2003,7 @@ async function makeReport(line,btn,label,opts){
  try{
   const blob=await buildLineReport(line,(d,n)=>{btn.textContent="PDF "+d+"/"+n},opts);
   if(!blob){toast("Nothing to report for this line yet");return}
-  reportFile=new File([blob],"RORUN_"+line+"_report_"+today()+".pdf",{type:"application/pdf"});
+  reportFile=new File([blob],"RORUN_"+fileLine(line)+"_report_"+today()+".pdf",{type:"application/pdf"});
   $("rep-info").textContent=reportFile.name+" · "+(reportFile.size/1048576).toFixed(1)+" MB";
   $("rep-back").hidden=false;
  }catch(e){toast("Could not build the report ("+((e&&(e.name||e.message))||"error")+")")}
