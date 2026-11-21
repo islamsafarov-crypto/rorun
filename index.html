@@ -222,6 +222,9 @@ body.has-selbar{padding-bottom:84px}
 #photo-view-cap{width:min(92vw,460px);padding:10px 12px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(255,255,255,.1);color:#fff;font:inherit;font-size:15px}
 #photo-view-cap[hidden]{display:none}
 #photo-view-cap::placeholder{color:rgba(255,255,255,.55)}
+.prj-chip{display:block;width:100%;margin-top:8px;padding:9px 12px;border:1px solid var(--acc);border-radius:6px;background:transparent;color:var(--acc-t,var(--ink));font:inherit;font-size:13px;font-weight:600;text-align:left}
+.prj-lines-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin:0 0 8px}
+.rd-panel .prj-line{margin-bottom:6px;padding:10px 12px}
 </style>
 </head>
 <body>
@@ -360,7 +363,7 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v24";
+const APP_VERSION="v25";
 window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
@@ -613,6 +616,16 @@ function allLines(){
  photos.forEach(p=>{if(p.line&&!isPrj(p.line))set.add(p.line)});
  return Array.from(set).sort();
 }
+function projectLines(project){
+ const set=new Set();
+ runs.concat(clpRuns).forEach(r=>{if(r.project===project&&r.line)set.add(r.line)});
+ return Array.from(set).sort();
+}
+function lineProjects(line){
+ const seen=[];
+ runs.concat(clpRuns).filter(r=>r.line===line&&r.project).sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(r=>{if(seen.indexOf(r.project)<0)seen.push(r.project)});
+ return seen;
+}
 function allProjects(){
  const set=new Set();
  runs.concat(clpRuns).forEach(r=>{if(r.project)set.add(r.project)});
@@ -633,7 +646,7 @@ function renderProjects(){
   const key="PRJ:"+x;
   const m=photos.filter(p=>p.line===key&&p.kind==="mob").length,d=photos.filter(p=>p.line===key&&p.kind==="demob").length;
   const n=m+d;
-  return "<div class='line-item' data-line='"+esc(key)+"'><div class='li-main'><b>"+esc(x)+"</b><div class='rd-row'><small class='rd-txt'>Mobilization "+m+" · Demobilization "+d+"</small></div></div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
+  return "<div class='line-item' data-line='"+esc(key)+"'><div class='li-main'><b>"+esc(x)+"</b><div class='rd-row'><small class='rd-txt'>Mobilization "+m+" · Demobilization "+d+" · Lines "+projectLines(x).length+"</small></div></div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
  }).join("");
 }
 function setPhotosMode(m){
@@ -647,12 +660,12 @@ function renderPhotoLines(){
  if(photosMode==="projects"){renderProjects();return}
  const q=$("pq").value.trim().toUpperCase();
  const all=allLines();
- const lines=all.filter(l=>!q||l.includes(q));
+ const lines=all.filter(l=>!q||l.includes(q)||lineProjects(l).some(x=>x.toUpperCase().includes(q)));
  const L=$("photo-lines");
  if(!lines.length){L.innerHTML="<div class='empty'>"+(all.length?"No matches found":"No lines yet. Add a run first.")+"</div>";return}
  L.innerHTML=lines.map(l=>{
   const n=photos.filter(p=>p.line===l).length;
-  return "<div class='line-item' data-line='"+esc(l)+"'><div class='li-main'><b>"+esc(l)+"</b><div class='rd-row'>"+readyHtml(l)+"</div></div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
+  return "<div class='line-item' data-line='"+esc(l)+"'><div class='li-main'><b>"+esc(l)+"</b><div class='rd-row'>"+readyHtml(l)+"</div>"+(lineProjects(l).length?"<small class='rd-txt'>Project "+lineProjects(l).map(esc).join(", ")+"</small>":"")+"</div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
  }).join("");
 }
 const CAM_SVG="<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3.5 8.5h3l1.6-2.5h7.8l1.6 2.5h3v10.5h-17z'/><circle cx='12' cy='13.5' r='3.6'/></svg>";
@@ -667,21 +680,33 @@ function updateFormPhotoBtn(){
  const l=formLine(),ok=VALID.line.re.test(l),n=ok?photoCount(l):0;
  b.innerHTML=CAM_SVG+"<span>Photos"+(ok&&n?" ("+n+")":"")+"</span>";
 }
-let photoFrom=null;
-function openPhotoLine(line,from){
- photoFrom=from||null;
+let photoFrom=null,photoBack=null;
+function leavePhotoLine(){
+ if(photoBack){const k=photoBack;photoBack=null;openPhotoLine(k);return}
+ currentLine=null;show(photoFrom||"photos");
+}
+function openPhotoLine(line,from,back){
+ photoFrom=from||null;photoBack=back||null;
  currentLine=line;pendingKind=kindsFor(line)[0][0];
  selMode=false;selected.clear();
  pendingTech="";
  if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
  $("pl-title").textContent=(isPrj(line)?"":"Line: ")+lineTitle(line);
- $("pl-back").textContent=isPrj(line)?"← Projects":"← Lines";
- $("pl-ready").hidden=isPrj(line);
- $("pl-ready").innerHTML=isPrj(line)?"":"<div class='rd-row'>"+readyHtml(line)+"</div>";
+ $("pl-back").textContent=photoBack?"← "+lineTitle(photoBack):(isPrj(line)?"← Projects":"← Lines");
+ $("pl-ready").hidden=false;
+ $("pl-ready").innerHTML=isPrj(line)?prjLinesHtml(line.slice(4)):"<div class='rd-row'>"+readyHtml(line)+"</div>"+lineProjects(line).map(x=>"<button type='button' class='prj-chip' data-prj='"+esc(x)+"'>Project "+esc(x)+" · Mob/Demob photos ›</button>").join("");
  $("pl-kind-tabs").innerHTML=kindsFor(line).map(([k,l])=>"<button type='button' data-k='"+k+"' aria-pressed='"+(k===pendingKind)+"'>"+l+"</button>").join("");
  renderPhotoLine(line);
  show("photo-line");
  updateSelBar();
+}
+function prjLinesHtml(project){
+ const ls=projectLines(project);
+ if(!ls.length)return "<div class='rd-txt'>No runs for this project yet — lines will appear here after you add a run with this Project Number.</div>";
+ return "<div class='prj-lines-title'>Lines in this project ("+ls.length+")</div>"+ls.map(l=>{
+  const n=photos.filter(p=>p.line===l).length;
+  return "<div class='line-item prj-line' data-pline='"+esc(l)+"'><div class='li-main'><b>"+esc(l)+"</b><div class='rd-row'>"+readyHtml(l)+"</div></div><span class='line-count'>"+n+" photo"+(n===1?"":"s")+"</span></div>";
+ }).join("");
 }
 function lineTechs(line){
  const out=[];const add=t=>{if(t&&out.indexOf(t)<0)out.push(t)};
@@ -1441,7 +1466,7 @@ function setBar(v){
 }
 function goBack(){
  if(curView==="new")show("list");
- else if(curView==="photo-line"){currentLine=null;show(photoFrom||"photos")}
+ else if(curView==="photo-line"){leavePhotoLine()}
  else show("home");
 }
 function show(v){
@@ -1536,7 +1561,7 @@ $("prj-go").onclick=()=>{
  $("prj-input").value="";openPhotoLine("PRJ:"+v);
 };
 $("photo-lines").onclick=e=>{const it=e.target.closest(".line-item");if(it)openPhotoLine(it.dataset.line)};
-$("pl-back").onclick=()=>{currentLine=null;show(photoFrom||"photos")};
+$("pl-back").onclick=leavePhotoLine;
 $("pl-kind-tabs").onclick=e=>{
  const b=e.target.closest("button");if(!b)return;
  pendingKind=b.dataset.k;
@@ -1547,6 +1572,12 @@ $("pl-mail").onclick=()=>{const l=currentLine,k=pendingKind;emailItems(allItems(
 $("pl-mailall").onclick=()=>{const l=currentLine;emailItems(allItems(l),lineTitle(l)+" — all photos",$("pl-mailall"))};
 $("pl-tech").onclick=e=>{const b=e.target.closest("button");if(!b)return;pendingTech=b.dataset.t;renderTechChips()};
 $("pl-select").onclick=()=>setSelMode(!selMode);
+$("pl-ready").onclick=e=>{
+ const c=e.target.closest(".prj-chip");
+ if(c&&currentLine){openPhotoLine("PRJ:"+c.dataset.prj,null,currentLine);return}
+ const it=e.target.closest(".prj-line");
+ if(it&&currentLine)openPhotoLine(it.dataset.pline,null,currentLine);
+};
 $("pl-pdf").onclick=()=>{const l=currentLine;makeReport(l,$("pl-pdf"),"📄 PDF of all photos")};
 $("pl-selall").onclick=()=>{
  const all=currentLine?allItems(currentLine):[];
