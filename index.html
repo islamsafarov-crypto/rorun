@@ -59,6 +59,7 @@ legend{font-weight:600;padding:0 6px;color:var(--head)}
 .f.err .hint{color:var(--no)}
 input[type=text],input[type=date],input[type=time],input[type=number],textarea,.q{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit}
 .f select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit}
+.calc-display.calc-multi{white-space:pre-line}
 .calc-display{width:100%;padding:11px 12px;border:1px dashed var(--line);border-radius:4px;background:var(--bg);color:var(--acc-t);font:inherit;font-weight:600;box-sizing:border-box}
 .calc-display.gauge-red,.gauge-line.gauge-red{color:#fff;background:var(--no);border-color:var(--no);border-style:solid}
 .calc-display.gauge-orange,.gauge-line.gauge-orange{color:#1b1b1b;background:var(--warm);border-color:var(--warm);border-style:solid}
@@ -363,7 +364,7 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v25";
+const APP_VERSION="v26";
 window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
@@ -422,12 +423,12 @@ const ADMIN_UID="QrMEsZfztOaxHhDQnDhK5g6g8wF3";
 const EQUIPMENT=["RoGeo MD","RoGeo XT","RoCorr MFL-A","RoCorr UT","RoCorr MFL-C (AFD)","EMAT"];
 const CLP_TECH=["CLP","GP","HD","FOAM"];
 const ILI_G=[
-["Project",[["project","Project Number","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["toolid","Tool Name / ID","text"],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected Velocity","num","m/s"],["cdist","Distance by Client","num","m"]]],
+["Project",[["project","Project Number","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",EQUIPMENT],["toolid","Tool Name / ID","text"],["passid","Passage ID","num","mm"],["operator","Employee","sel",EMPLOYEES],["expspeed","Expected Velocity","num","m/s"],["cdist","Distance by Client","num","m"]]],
 ["Before Launch",[["on","Switched On","time"],["tx","Transmitter","yn"],["bml","BM L","yn"],["bmsn_l","BM L Serial No.","text"],["bmdist_bl","BM Distance","num","m"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-Run)","yn"],["pl","Pressure Launcher","num","bar"]]],
 ["Run",[["launched","Launched","time"],["date_on","Date","date"],["bmr","BM R","yn"],["bmdist_run","BM Distance","num","m"],["bmsn_r","BM R Serial No.","text"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure Receiver","num","bar"],["off","Switched Off","time"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-Run)","yn"]]],
 ["Summary",[["dist","Recorded Distance","num","m"],["distdiff","Distance Difference","calc"],["data","Data","dnum",["GB","MB"]],["duration","Run Duration","calc"],["avgspeed","Average Velocity","calc"],["notes","Notes","area"]]]];
 const CLP_G=[
-["Project",[["project","Project Number","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["toolid","Tool Name / ID","text"],["operator","Employee","sel",EMPLOYEES],["origid","Original ID","num","mm"],["ilimin","ILI Min ID","num","mm"],["cdist","Distance by Client","num","m"]]],
+["Project",[["project","Project Number","text"],["client","Client","text"],["line","Line ID","text"],["rnum","Run No.","text"],["equip","Technology","sel",CLP_TECH],["toolid","Tool Name / ID","text"],["operator","Employee","sel",EMPLOYEES],["origid","Original ID","num","mm"],["ilitools","ILI Tools on This Line","calc"],["ilimin","ILI Min ID (Manual)","num","mm"],["cdist","Distance by Client","num","m"]]],
 ["Before Launch",[["tx","Transmitter","yn"],["lpic","Launcher Picture","yn"],["toolpic_bl","Tool Pictures (Pre-Run)","yn"],["pl","Pressure Launcher","num","bar"]]],
 ["Run",[["launched","Launched","time"],["date_on","Date","date"],["received","Received","time"],["date_off","Date","date"],["pr","Pressure Receiver","num","bar"],["minid","Post-Run ID","num","mm"],["rpic","Receiver Picture","yn"],["toolpic_run","Tool Pictures (Post-Run)","yn"]]],
 ["Summary",[["duration","Run Duration","calc"],["avgspeed","Average Velocity","calc"],["iddiff","ID Difference","calc"],["gauge","Gauge Plate Check","calc"],["notes","Notes","area"]]]];
@@ -602,7 +603,7 @@ function lineReadiness(line){
  else if(g.level==="orange"){level="orange";label="Check gauge plate"}
  else if(!done){level="orange";label="CLP/GP run incomplete"}
  else{level="green";label="Ready for ILI"}
- const parts=["CLP/GP: "+(clp.length?clp.length+" run"+(clp.length>1?"s":"")+(done?" ✓":" (incomplete)"):"none"),"Gauge plate: "+(g?g.text:"no data"),"ILI: "+(ili.length?ili.length+" run"+(ili.length>1?"s":""):"none")];
+ const parts=["CLP/GP: "+(clp.length?clp.length+" run"+(clp.length>1?"s":"")+(done?" ✓":" (incomplete)"):"none"),"Gauge plate: "+(g?g.line:"no data"),"ILI: "+(ili.length?ili.length+" run"+(ili.length>1?"s":""):"none")];
  return{level,label,parts};
 }
 function readyHtml(line){
@@ -1141,18 +1142,53 @@ function idDiffText(r){
  return (o-m).toFixed(1)+" mm";
 }
 const GAUGE={red:2,orange:5}; // mm margin thresholds (working values)
+function gaugeClass(m){
+ if(m<=GAUGE.red)return{level:"red",label:m<0?"Below ILI Min ID - tool will not pass":"Close to ILI limit"};
+ if(m<=GAUGE.orange)return{level:"orange",label:"Attention"};
+ return{level:"green",label:"OK"};
+}
+const sgn=m=>(m>0?"+":"")+m.toFixed(1);
+// ILI tools of the same line (ILI runs, latest run per technology+tool) with their Passage ID.
+// If none has a Passage ID, the manual "ILI Min ID" of the CLP/GP run is used (old behaviour).
+function gaugeTargets(r){
+ const out=[];
+ if(r&&r.line){
+  const latest=new Map();
+  runs.filter(x=>x.line===r.line&&(!r.project||!x.project||x.project===r.project))
+   .sort((a,b)=>(a.ts||0)-(b.ts||0))
+   .forEach(x=>latest.set((x.equip||"")+"|"+(x.toolid||""),x));
+  latest.forEach(x=>out.push({name:(x.equip||"ILI tool")+(x.toolid?" · "+x.toolid:""),lim:parseNum(x.passid)}));
+ }
+ if(out.some(t=>isFinite(t.lim)))return out;
+ const man=parseNum(r&&r.ilimin);
+ return isFinite(man)?[{name:"ILI Min ID",lim:man,manual:true}]:out;
+}
 function gaugeInfo(r){
- const lim=parseNum(r.ilimin),post=parseNum(r.minid);
- if(!isFinite(lim)||!isFinite(post))return null;
- const m=+(post-lim).toFixed(1);
- let level,label;
- if(m<=GAUGE.red){level="red";label=m<0?"Below ILI Min ID - tool will not pass":"Close to ILI limit"}
- else if(m<=GAUGE.orange){level="orange";label="Attention"}
- else{level="green";label="OK"}
- return{margin:m,level,label,text:(m>0?"+":"")+m.toFixed(1)+" mm — "+label};
+ const post=parseNum(r&&r.minid);
+ if(!isFinite(post))return null;
+ const rank={green:0,orange:1,red:2};
+ const items=[];
+ gaugeTargets(r).forEach(t=>{
+  if(!isFinite(t.lim))return;
+  const m=+(post-t.lim).toFixed(1);
+  items.push(Object.assign({},t,{margin:m},gaugeClass(m)));
+ });
+ if(!items.length)return null;
+ const worst=items.reduce((w,x)=>(rank[x.level]>rank[w.level]||(rank[x.level]===rank[w.level]&&x.margin<w.margin))?x:w);
+ const one=it=>(it.manual?"":it.name+" ("+it.lim+" mm): ")+sgn(it.margin)+" mm — "+it.label;
+ const missing=gaugeTargets(r).filter(t=>!isFinite(t.lim)).map(t=>t.name+": Passage ID not set");
+ return{margin:worst.margin,level:worst.level,label:worst.label,items,
+  text:items.map(one).concat(missing).join("\n"),
+  line:items.map(one).join("  |  ")};
+}
+function iliToolsText(r,multi){
+ const t=gaugeTargets(r).filter(x=>!x.manual);
+ if(!t.length)return "";
+ return t.map(x=>x.name+(isFinite(x.lim)?" ("+x.lim+" mm)":": Passage ID not set")).join(multi?"\n":"  |  ");
 }
 function calcText(k,r){
- if(k==="gauge"){const g=gaugeInfo(r);return g?g.text:"—"}
+ if(k==="gauge"){const g=gaugeInfo(r);return g?g.line:"—"}
+ if(k==="ilitools"){return iliToolsText(r,false)||"—"}
  if(k==="duration")return durationText(r);
  if(k==="avgspeed")return avgSpeedText(r);
  if(k==="distdiff")return distDiffText(r);
@@ -1170,6 +1206,8 @@ function speedOverExpected(r){
 function setCalcField(k,r){
  const el=$("f-"+k);
  el.textContent=calcText(k,r);
+ if(k==="gauge"){const g=gaugeInfo(r);el.textContent=g?g.text:"—";el.classList.add("calc-multi")}
+ if(k==="ilitools"){el.textContent=iliToolsText(r,true)||(r.line?"No ILI runs with Passage ID on this line yet — create ILI runs first, or use the manual ILI Min ID":"Enter Line ID");el.classList.add("calc-multi")}
  if(k==="avgspeed")el.classList.toggle("calc-warn",speedOverExpected(r));
  if(k==="distdiff")el.classList.toggle("calc-warn",distShort(r));
  if(k==="gauge"){const g=gaugeInfo(r);["red","orange","green"].forEach(c=>el.classList.toggle("gauge-"+c,!!g&&g.level===c))}
@@ -1275,7 +1313,7 @@ function nextRunNo(base){
 }
 function startRerun(id){
  const base=activeRunsArr().find(x=>x.id===id);if(!base)return;
- const keys=activeType==="clp"?["project","client","line","equip","toolid","operator","origid","ilimin","cdist"]:["project","client","line","equip","toolid","operator","expspeed","cdist"];
+ const keys=activeType==="clp"?["project","client","line","equip","toolid","operator","origid","ilimin","cdist"]:["project","client","line","equip","toolid","passid","operator","expspeed","cdist"];
  const seed={};keys.forEach(k=>{seed[k]=base[k]||""});
  seed.rnum=nextRunNo(base);
  setActiveSchema(activeType);build();
@@ -1307,7 +1345,7 @@ function initFormListeners(){
    if(k==="line")$("f-"+k).value=$("f-"+k).value.toUpperCase();
    hideSuggestions(k);
    if(VALID[k])validateField(k);
-   if(k==="line")syncPicFromLine($("f-line").value);
+   if(k==="line"){syncPicFromLine($("f-line").value);refreshCalcFields()}
    return}});
  f.addEventListener("focusin",e=>{
   if(formReadonly)return;
@@ -1326,7 +1364,7 @@ function initFormListeners(){
   if(k==="rnum")maskRnum(e.target);
   if(k&&VALID[k])validateField(k);
   if(k&&SUGGEST_KEYS.includes(k))showSuggestions(k,e.target.value);
-  if(k==="launched"||k==="date_on"||k==="received"||k==="date_off"||k==="dist"||k==="expspeed"||k==="cdist"||k==="origid"||k==="minid"||k==="ilimin")refreshCalcFields()});
+  if(k==="launched"||k==="date_on"||k==="received"||k==="date_off"||k==="dist"||k==="expspeed"||k==="cdist"||k==="origid"||k==="minid"||k==="ilimin"||k==="line"||k==="passid")refreshCalcFields()});
 }
 function maskProject(el){
  const caret=el.selectionStart;
@@ -1626,7 +1664,7 @@ function renderList(){
  L.innerHTML=res.map(r=>{const dr=r.date_on?esc(r.date_on)+(r.date_off&&r.date_off!==r.date_on?" – "+esc(r.date_off):""):"";
   const editable=canEdit(r);
   const miss=missingPics(r);
-  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?photoBtnHtml(r.line):"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small>"+(activeType==="clp"&&gaugeInfo(r)?"<small class='gauge-line gauge-"+gaugeInfo(r).level+"'>Gauge plate: "+esc(gaugeInfo(r).text)+"</small>":"")+(miss.length?"<small class='warn-line'>⚠ No "+miss.map(esc).join(", ")+" photo"+(miss.length>1?"s":"")+"</small>":"")+"</div></div>"}).join("")}
+  return "<div class='item' data-id='"+r.id+"'><div class='item-del' data-id='"+r.id+"'>Delete</div><div class='item-body"+(r.complete==="y"?" complete":" incomplete")+(editable?"":" readonly")+"' data-id='"+r.id+"'>"+(r.line?photoBtnHtml(r.line):"")+"<b>"+esc(r.project)+"</b> "+esc(r.line)+(r.equip?" · "+esc(r.equip):"")+(r.complete==="y"?" <span class='badge-ok'>Complete</span>":" <span class='badge-no'>Incomplete</span>")+(editable?"":" <span class='badge-lock'>🔒 View only</span>")+"<small>"+esc(r.client)+(dr?" · "+dr:"")+(r.operator?" · "+esc(r.operator):"")+"</small><small>"+(r.dist?esc(r.dist)+" m":"")+(r.data?" · "+esc(r.data)+" "+esc(r["data-unit"]||"GB"):"")+"</small>"+(activeType==="clp"&&gaugeInfo(r)?"<small class='gauge-line gauge-"+gaugeInfo(r).level+"'>Gauge plate: "+esc(gaugeInfo(r).line)+"</small>":"")+(miss.length?"<small class='warn-line'>⚠ No "+miss.map(esc).join(", ")+" photo"+(miss.length>1?"s":"")+"</small>":"")+"</div></div>"}).join("")}
 function esc(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function shareText(){
  const r=read();
@@ -1733,7 +1771,7 @@ $("list").onclick=e=>{
  show("new")};
 const XLSX_COLUMNS_ILI=[
  ["Project Number","project","text"],["Client","client","text"],["Line ID","line","text"],["Run No.","rnum","text"],
- ["Technology","equip","text"],["Tool Name / ID","toolid","text"],["Employee","operator","text"],["Expected Velocity (m/s)","expspeed","number"],
+ ["Technology","equip","text"],["Tool Name / ID","toolid","text"],["Passage ID (mm)","passid","number"],["Employee","operator","text"],["Expected Velocity (m/s)","expspeed","number"],
  ["Distance by Client (m)","cdist","number"],
  ["Switched On","on","text"],["Transmitter","tx","yn"],["BM L","bml","yn"],["BM L Serial No.","bmsn_l","text"],["BM Distance Launch (m)","bmdist_bl","number"],
  ["Launcher Picture","lpic","yn"],["Tool Pictures Pre-Run","toolpic_bl","yn"],["Pressure Launcher (bar)","pl","number"],
@@ -1756,7 +1794,7 @@ function exportXlsx(){
  if(!arr.length){toast("No runs to export yet");return}
  const isClp=activeType==="clp";
  const cols=isClp?XLSX_COLUMNS_CLP:XLSX_COLUMNS_ILI;
- const extraHeaders=["Run Duration","Average Velocity (m/s)"].concat(isClp?["ID Difference (mm)","Margin to ILI Min ID (mm)","Gauge Plate Status"]:["Above Expected Velocity?","Distance Difference (m)"]);
+ const extraHeaders=["Run Duration","Average Velocity (m/s)"].concat(isClp?["ID Difference (mm)","Margin to ILI Min ID (mm)","Gauge Plate Status","Gauge Plate Details"]:["Above Expected Velocity?","Distance Difference (m)"]);
  const header=cols.map(c=>c[0]).concat(extraHeaders);
  const rows=arr.map(r=>{
   const row=cols.map(([label,key,kind])=>{
@@ -1775,6 +1813,7 @@ function exportXlsx(){
    const g=gaugeInfo(r);
    row.push(g?g.margin:"");
    row.push(g?({red:"RED",orange:"ORANGE",green:"GREEN"}[g.level]+" - "+g.label):"");
+   row.push(g?g.line:"");
   }else{
    row.push(speedOverExpected(r)?"Yes":"No");
    const diffTxt=distDiffText(r);
@@ -1894,7 +1933,7 @@ async function buildLineReport(line,onProgress,opts){
   const col={green:OK,orange:WARM,red:NO,none:MUTE}[rd.level];
   await ensure(16);
   T("Line readiness: "+rd.label,M,y,{size:9.5,bold:true,color:col});y+=5;
-  T(rd.parts.join("   →   "),M,y,{size:8.5,color:MUTE,maxW:CW});y+=6;
+  wrap(rd.parts.join("   →   "),CW,8.5).forEach(ln=>{T(ln,M,y,{size:8.5,color:MUTE});y+=4});y+=2;
  }
  const valueOf=(k,t,u,r)=>{
   if(t==="yn")return r[k]==="y"?"Yes":r[k]==="n"?"No":"";
@@ -1921,7 +1960,7 @@ async function buildLineReport(line,onProgress,opts){
     for(const [gname,fields] of groups){
      const items=[];
      fields.forEach(([k,l,t,u])=>{
-      if(["project","client","line","rnum","equip","operator","date_on","date_off","notes"].includes(k))return;
+      if(["project","client","line","rnum","equip","operator","date_on","date_off","notes","ilitools"].includes(k))return;
       let v=valueOf(k,t,u,r);
       if(k==="launched"&&r.launched)v=(r.date_on?r.date_on+"  ":"")+r.launched;
       if(k==="received"&&r.received)v=(r.date_off?r.date_off+"  ":"")+r.received;
@@ -1929,6 +1968,10 @@ async function buildLineReport(line,onProgress,opts){
       if(k==="avgspeed"&&speedOverExpected(r))v+="  (above expected)";
       if(k==="distdiff"&&distShort(r))v+="  (short)";
       const gi=k==="gauge"?gaugeInfo(r):null;
+      if(gi&&!(gi.items.length===1&&gi.items[0].manual)){
+       gi.items.forEach(it=>items.push(["Gauge "+it.name.split(" · ")[0],it.lim+" mm: "+sgn(it.margin)+" mm · "+(it.margin<0?"NO PASS":it.level.toUpperCase()),{red:NO,orange:WARM,green:OK}[it.level]]));
+       return;
+      }
       items.push([l,v,gi?{red:NO,orange:WARM,green:OK}[gi.level]:null]);
      });
      if(!items.length)continue;
