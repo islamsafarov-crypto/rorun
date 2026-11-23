@@ -153,6 +153,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px soli
 .photo-thumb.pending::after{content:"⏳";position:absolute;left:4px;bottom:2px;font-size:14px}
 .pl-pending{background:var(--card);border:1px dashed var(--warm);color:var(--warm);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:13px}
 .pl-pending[hidden]{display:none}
+.pic-open{display:inline-flex;align-items:center;gap:6px;margin-top:6px;background:none;border:1px solid var(--line,#888);border-radius:8px;padding:5px 10px;font-size:13px;color:inherit}
+.pic-open svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6}
 .pic-warn-msg{display:none;color:var(--warm);font-size:12px;margin-top:4px}
 .pic-warn .pic-warn-msg{display:block}
 .pic-warn .yn{outline:1px solid var(--warm);border-radius:4px}
@@ -364,7 +366,7 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v26";
+const APP_VERSION="v27";
 window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
@@ -1241,7 +1243,7 @@ function lastDefaults(){
 const PAIR_ROWS=new Set(["line+rnum","tx+bml","lpic+toolpic_bl","bmr+bmdist_run","rpic+toolpic_run","dist+distdiff","duration+avgspeed"]);
 function fieldInner(k,l,t,u){
  let h="<label for='f-"+k+"'>"+l+"</label>";
- if(t==="yn")h+="<div class='yn' data-k='"+k+"'><button type='button' data-v='y'>Yes</button><button type='button' data-v='n'>No</button></div>"+(PIC_KIND[k]?"<div class='pic-warn-msg'>⚠ Marked Yes, but no "+kindLabel(PIC_KIND[k])+" photo found for this line</div>":"");
+ if(t==="yn")h+="<div class='yn' data-k='"+k+"'><button type='button' data-v='y'>Yes</button><button type='button' data-v='n'>No</button></div>"+(PIC_KIND[k]?"<button type='button' class='pic-open' data-pk='"+PIC_KIND[k]+"'>"+CAM_SVG+"<span>Add / view photos</span></button>":"")+(PIC_KIND[k]?"<div class='pic-warn-msg'>⚠ Marked Yes, but no "+kindLabel(PIC_KIND[k])+" photo found for this line</div>":"");
  else if(t==="time")h+="<div class='row'><input type='time' id='f-"+k+"'><button type='button' class='now' data-now='"+k+"'>Now</button></div>";
  else if(t==="num")h+="<div class='unit'><input type='text' inputmode='decimal' id='f-"+k+"'><span>"+u+"</span></div>";
  else if(t==="dnum")h+="<div class='unit'><input type='text' inputmode='decimal' id='f-"+k+"'><div class='ut' data-k='"+k+"-unit'>"+u.map(o=>"<button type='button' data-v='"+o+"'>"+o+"</button>").join("")+"</div></div>";
@@ -1290,6 +1292,15 @@ function build(){
   if(!VALID.line.re.test(l)){toast("Enter a valid Line ID first");return}
   makeReport(l,$("formpdf"),"📄 PDF");
  };
+ if(!f._picBound)f._picBound=1,f.addEventListener("click",e=>{
+  const b=e.target.closest(".pic-open");if(!b)return;
+  const l=formLine();
+  if(!VALID.line.re.test(l)){toast("Enter a valid Line ID first");return}
+  openPhotoLine(l,"new");
+  pendingKind=b.dataset.pk;
+  $("pl-kind-tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.k===pendingKind)));
+  updateMailBtn();renderTechChips();
+ });
  $("formphotos").onclick=()=>{
   const l=formLine();
   if(!VALID.line.re.test(l)){toast("Enter a valid Line ID first");return}
@@ -1451,8 +1462,10 @@ async function submit(){
   const dup=arr.find(x=>x.id!==editId&&x.line===r.line&&(x.equip||"")===(r.equip||"")&&(x.rnum||"")===r.rnum);
   if(dup&&!(await askDup(r)))return;
  }
+ let oldLine="";
  if(editId){
   const i=arr.findIndex(x=>x.id===editId);
+  oldLine=i>-1?(arr[i].line||""):"";
   r.id=editId;r.ts=i>-1?arr[i].ts:Date.now();
   r.ownerUid=i>-1?(arr[i].ownerUid||null):(currentUser?currentUser.uid:null);
  }else{
@@ -1470,8 +1483,22 @@ async function submit(){
   try{const w=await withTimeout(cloudDb.collection(collName).doc(r.id).set(r),4000);if(w==="timeout")savedOffline=true}
   catch(e){toast("Saved locally — cloud sync failed")}
  }
+ if(oldLine&&r.line&&oldLine!==r.line){
+  const used=runs.concat(clpRuns).some(x=>x.id!==r.id&&x.line===oldLine);
+  if(used){if(photoCount(oldLine)||pendingPhotos.some(p=>p.line===oldLine))setTimeout(()=>toast("Photos stay on "+oldLine+" — other runs still use that Line ID"),1800)}
+  else{const n=await moveLinePhotos(oldLine,r.line);if(n)setTimeout(()=>toast(n+" photo"+(n===1?"":"s")+" moved to "+r.line),1800)}
+ }
  toast(savedOffline?"Saved on this phone — will sync when online":(wasEdit?"Changes saved":"Run saved"));
  editId=null;$("save").textContent="Save Run";$("delete").hidden=true;fill(lastDefaults());show("list");renderList();
+}
+async function moveLinePhotos(from,to){
+ let n=0;
+ for(const p of photos.filter(p=>p.line===from)){
+  p.line=to;n++;
+  if(cloudDb){try{await withTimeout(cloudDb.collection("photos").doc(p.id).update({line:to}),4000)}catch(e){}}
+ }
+ for(const p of pendingPhotos.filter(p=>p.line===from)){p.line=to;n++;try{await QDB.put(p)}catch(e){}}
+ return n;
 }
 let pendingDeleteId=null;
 function confirmDeleteRun(id){pendingDeleteId=id;$("del-back").hidden=false}
