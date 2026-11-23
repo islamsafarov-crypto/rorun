@@ -268,6 +268,8 @@ body.has-selbar{padding-bottom:84px}
 <section id="v-photo-line" hidden>
 <button type="button" class="ghost pl-back" id="pl-back">← Lines</button>
 <h2 class="pl-title" id="pl-title"></h2>
+<button type="button" class="ghost" id="pl-rename" hidden>✎ Change Line ID (move photos)</button>
+<div class="prj-add" id="pl-rename-box" hidden><input id="pl-rename-input" autocomplete="off" autocapitalize="characters" placeholder="Correct Line ID"><button type="button" id="pl-rename-go">Move</button></div>
 <div class="pl-tools"><button type="button" class="ghost" id="pl-select" hidden>Select</button><button type="button" class="ghost" id="pl-selall" hidden>Select all</button></div>
 <div class="rd-panel" id="pl-ready"></div>
 <div class="photo-kind-tabs" id="pl-kind-tabs"></div>
@@ -694,6 +696,7 @@ function openPhotoLine(line,from,back){
  selMode=false;selected.clear();
  pendingTech="";
  if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
+ $("pl-rename").hidden=isPrj(line);$("pl-rename-box").hidden=true;
  $("pl-title").textContent=(isPrj(line)?"":"Line: ")+lineTitle(line);
  $("pl-back").textContent=photoBack?"← "+lineTitle(photoBack):(isPrj(line)?"← Projects":"← Lines");
  $("pl-ready").hidden=false;
@@ -1632,6 +1635,18 @@ $("pl-kind-tabs").onclick=e=>{
  pendingKind=b.dataset.k;
  $("pl-kind-tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
  updateMailBtn();renderTechChips();
+};
+$("pl-rename").onclick=()=>{const b=$("pl-rename-box");b.hidden=!b.hidden;if(!b.hidden){$("pl-rename-input").value=currentLine;$("pl-rename-input").focus()}};
+$("pl-rename-go").onclick=async()=>{
+ const from=currentLine,to=$("pl-rename-input").value.trim();
+ if(!to||to===from){toast("Enter a different Line ID");return}
+ if(!VALID.line.re.test(to)){toast("Line ID doesn't match the required format");return}
+ const merge=photoCount(to)>0;
+ if(!$("pl-rename-go").dataset.ok){$("pl-rename-go").dataset.ok="1";$("pl-rename-go").textContent=merge?"Merge into "+to+"?":"Confirm move";setTimeout(()=>{delete $("pl-rename-go").dataset.ok;$("pl-rename-go").textContent="Move"},5000);return}
+ delete $("pl-rename-go").dataset.ok;$("pl-rename-go").textContent="Move";
+ const n=await moveLinePhotos(from,to);
+ toast(n+" photo"+(n===1?"":"s")+" moved to "+to);
+ openPhotoLine(to,photoFrom,photoBack);
 };
 $("pl-mail").onclick=()=>{const l=currentLine,k=pendingKind;emailItems(allItems(l).filter(x=>x.kind===k),lineTitle(l)+" — "+kindLabel(k),$("pl-mail"))};
 $("pl-mailall").onclick=()=>{const l=currentLine;emailItems(allItems(l),lineTitle(l)+" — all photos",$("pl-mailall"))};
