@@ -274,6 +274,7 @@ body.has-selbar{padding-bottom:84px}
 <div class="rd-panel" id="pl-ready"></div>
 <div class="photo-kind-tabs" id="pl-kind-tabs"></div>
 <div class="tech-chips" id="pl-tech" hidden></div>
+<div class="tech-chips" id="pl-proj" hidden></div>
 <input type="file" accept="image/*" multiple hidden id="pl-file-input">
 <button type="button" class="ghost photo-add" id="pl-add" hidden>+ Add Photo</button>
 <button type="button" class="ghost photo-add" id="pl-mail" hidden></button>
@@ -368,7 +369,7 @@ body.has-selbar{padding-bottom:84px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-const APP_VERSION="v27";
+const APP_VERSION="v28";
 window.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("app-ver");if(v)v.textContent="RORUN "+APP_VERSION;const h=document.getElementById("home-ver");if(h)h.textContent=APP_VERSION});
 if("serviceWorker" in navigator){
  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
@@ -694,8 +695,8 @@ function openPhotoLine(line,from,back){
  photoFrom=from||null;photoBack=back||null;
  currentLine=line;pendingKind=kindsFor(line)[0][0];
  selMode=false;selected.clear();
- pendingTech="";
- if(from==="new"){const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
+ pendingTech="";photoProj="";
+ if(from==="new"){const fp=document.getElementById("f-project");if(fp&&fp.value&&!isPrj(line))photoProj=fp.value;const e=document.getElementById("f-equip");if(e&&e.value){formTech[line]=e.value;pendingTech=e.value}}
  $("pl-rename").hidden=isPrj(line);$("pl-rename-box").hidden=true;
  $("pl-title").textContent=(isPrj(line)?"":"Line: ")+lineTitle(line);
  $("pl-back").textContent=photoBack?"← "+lineTitle(photoBack):(isPrj(line)?"← Projects":"← Lines");
@@ -734,9 +735,36 @@ function renderTechChips(){
  box.hidden=false;
  box.innerHTML="<span class='tech-lbl'>Technology for new photos:</span>"+techs.map(t=>"<button type='button' data-t='"+esc(t)+"' aria-pressed='"+(t===cur)+"'>"+esc(t)+"</button>").join("");
 }
+let photoProj="";
+function photoProjList(line){
+ if(isPrj(line))return [];
+ const out=[];const add=p=>{if(p&&out.indexOf(p)<0)out.push(p)};
+ lineProjects(line).forEach(add);
+ photos.concat(pendingPhotos).filter(p=>p.line===line).forEach(p=>add(p.project));
+ if(photoProj&&photoProj!=="__none")add(photoProj);
+ const hasNone=photos.concat(pendingPhotos).some(p=>p.line===line&&!p.project);
+ if(out.length>=1&&hasNone&&out.length>=2)out.push("__none");
+ return out;
+}
+function projFilterOn(line){return line===currentLine&&!!photoProj&&photoProjList(line).length>=2}
+function newPhotoProject(line){
+ if(isPrj(line))return "";
+ if(photoProj&&photoProj!=="__none")return photoProj;
+ const pr=lineProjects(line);return pr[0]||"";
+}
+function projLabel(p){return p==="__none"?"No project":p}
+function renderProjChips(){
+ const box=$("pl-proj");if(!box)return;
+ const list=currentLine?photoProjList(currentLine):[];
+ if(list.length<2){box.hidden=true;box.innerHTML="";return}
+ box.hidden=false;
+ box.innerHTML="<span class='tech-lbl'>Project:</span><button type='button' data-p='' aria-pressed='"+(!photoProj)+"'>All</button>"+list.map(p=>"<button type='button' data-p='"+esc(p)+"' aria-pressed='"+(p===photoProj)+"'>"+esc(projLabel(p))+"</button>").join("");
+}
 function allItems(line){
- const a=photos.filter(p=>p.line===line).map(p=>({key:"s:"+p.id,src:p,pending:false,kind:p.kind,tech:p.tech||"",t:p.uploadedAt||0}));
- const b=pendingPhotos.filter(p=>p.line===line).map(p=>({key:"q:"+p.qid,src:p,pending:true,kind:p.kind,tech:p.tech||"",t:p.ts||0}));
+ const on=projFilterOn(line);
+ const pf=p=>!on||(photoProj==="__none"?!p.project:(p.project||"")===photoProj);
+ const a=photos.filter(p=>p.line===line&&pf(p)).map(p=>({key:"s:"+p.id,src:p,pending:false,kind:p.kind,tech:p.tech||"",t:p.uploadedAt||0}));
+ const b=pendingPhotos.filter(p=>p.line===line&&pf(p)).map(p=>({key:"q:"+p.qid,src:p,pending:true,kind:p.kind,tech:p.tech||"",t:p.ts||0}));
  return a.concat(b);
 }
 function itemBlob(it){return it.pending?Promise.resolve(it.src.blob):fetchPhotoBlob(it.src)}
@@ -770,7 +798,7 @@ function renderPhotoLine(line){
   }else body="<div class='photo-grid' data-k='"+k+"'>"+items.map(thumbHtml).join("")+"</div>";
   return "<div class='kind-section'><div class='kind-section-title'>"+label+" ("+items.length+")"+(nPend?" · "+nPend+" waiting":"")+"</div>"+body+"</div>";
  }).join("");
- updateMailBtn();updatePendingBanner();renderTechChips();updateSelBar();
+ updateMailBtn();updatePendingBanner();renderTechChips();renderProjChips();updateSelBar();
 }
 function kindLabel(k){const x=ALL_KINDS.find(a=>a[0]===k);return x?x[1]:k}
 const blobCache=new Map();
@@ -940,9 +968,9 @@ const QDB={
 };
 function newId(){return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2,8)}
 function withTimeout(p,ms){return Promise.race([p,new Promise(res=>setTimeout(()=>res("timeout"),ms))])}
-function hasPhoto(line,kind,tech){
+function hasPhoto(line,kind,tech,project){
  if(!line)return false;
- const ok=p=>p.line===line&&p.kind===kind&&(!TECH_KINDS.has(kind)||!tech||!p.tech||p.tech===tech);
+ const ok=p=>p.line===line&&p.kind===kind&&(!TECH_KINDS.has(kind)||!tech||!p.tech||p.tech===tech)&&(!project||!p.project||p.project===project);
  return photos.some(ok)||pendingPhotos.some(ok);
 }
 function canUploadNow(){return !!(assetsApi&&cloudDb&&currentUser&&navigator.onLine!==false)}
@@ -978,7 +1006,7 @@ async function dropPending(qid){
 async function uploadPhotoNow(it){
  const res=await assetsApi.upload(it.blob);
  const id=newId();
- const doc={id,assetId:res.id,url:res.url,line:it.line,kind:it.kind,tech:it.tech||"",caption:it.caption||"",uploadedAt:Date.now(),hash:it.hash||null};
+ const doc={id,assetId:res.id,url:res.url,line:it.line,project:it.project||"",kind:it.kind,tech:it.tech||"",caption:it.caption||"",uploadedAt:Date.now(),hash:it.hash||null};
  // If the connection drops right here, Firestore keeps the write and sends it later.
  await withTimeout(cloudDb.collection("photos").doc(id).set(doc),8000);
  if(!photos.some(p=>p.id===id))photos.unshift(doc);
@@ -1002,6 +1030,7 @@ async function processPhotoQueue(){
 }
 async function addPhotosForLine(line,kind,files,tech){
  tech=TECH_KINDS.has(kind)?(tech||""):"";
+ const proj=newPhotoProject(line);
  const list=Array.from(files||[]);
  if(!list.length)return;
  toast("Adding "+list.length+" photo"+(list.length>1?"s":"")+"…");
@@ -1016,9 +1045,9 @@ async function addPhotosForLine(line,kind,files,tech){
   try{blob=await stampBlob(blob,stampText(line,kind,tech))}catch(e){}
   let done=false;
   if(canUploadNow()){
-   try{await uploadPhotoNow({line,kind,tech,blob,hash});done=true;okCount++}catch(e){}
+   try{await uploadPhotoNow({line,project:proj,kind,tech,blob,hash});done=true;okCount++}catch(e){}
   }
-  if(!done){await enqueuePhoto({line,kind,tech,blob,hash});queued++}
+  if(!done){await enqueuePhoto({line,project:proj,kind,tech,blob,hash});queued++}
   if(!$("v-photo-line").hidden&&currentLine===line)renderPhotoLine(line);
  }
  if(queued)toast(queued+" photo"+(queued>1?"s":"")+" saved on this phone — will upload when online");
@@ -1033,7 +1062,7 @@ const KIND_TO_FIELD={launcher:"lpic",prerun:"toolpic_bl",receiver:"rpic",postrun
 const PIC_KIND={lpic:"launcher",toolpic_bl:"prerun",rpic:"receiver",toolpic_run:"postrun"};
 function missingPics(r){
  if(!r||!r.line)return [];
- return Object.keys(PIC_KIND).filter(f=>r[f]==="y"&&!hasPhoto(r.line,PIC_KIND[f],r.equip)).map(f=>kindLabel(PIC_KIND[f]));
+ return Object.keys(PIC_KIND).filter(f=>r[f]==="y"&&!hasPhoto(r.line,PIC_KIND[f],r.equip,r.project)).map(f=>kindLabel(PIC_KIND[f]));
 }
 function updatePicWarnings(){
  if(!$("form"))return;
@@ -1043,7 +1072,7 @@ function updatePicWarnings(){
   const el=document.querySelector("#form [data-k='"+f+"']");if(!el)return;
   const on=el.querySelector("[aria-pressed='true']");
   const eq=document.getElementById("f-equip");
-  const warn=ok&&!!on&&on.dataset.v==="y"&&!hasPhoto(line,PIC_KIND[f],eq?eq.value:"");
+  const warn=ok&&!!on&&on.dataset.v==="y"&&!hasPhoto(line,PIC_KIND[f],eq?eq.value:"",(document.getElementById("f-project")||{}).value||"");
   const wrap=el.closest(".f");if(wrap)wrap.classList.toggle("pic-warn",warn);
  });
 }
@@ -1438,7 +1467,7 @@ async function setCompleteNow(id,val){
 }
 let dupResolve=null;
 function askDup(r){
- $("dup-title").textContent="A run "+(r.rnum||"")+(r.equip?" · "+r.equip:"")+" for line "+r.line+" already exists. Save a duplicate?";
+ $("dup-title").textContent="A run "+(r.rnum||"")+(r.equip?" · "+r.equip:"")+" for line "+r.line+(r.project?" (project "+r.project+")":"")+" already exists. Save a duplicate?";
  $("dup-back").hidden=false;
  return new Promise(res=>{dupResolve=res});
 }
@@ -1454,15 +1483,15 @@ async function submit(){
  }
  const r=read();
  if(r.line){
-  if(hasPhoto(r.line,"launcher"))r.lpic="y";
-  if(hasPhoto(r.line,"receiver"))r.rpic="y";
+  if(hasPhoto(r.line,"launcher","",r.project))r.lpic="y";
+  if(hasPhoto(r.line,"receiver","",r.project))r.rpic="y";
  }
  if(!r.project){toast("Enter a project number");$("f-project").focus();return}
  if(!validateField("project")){toast("Project doesn't match the required format");$("f-project").focus();return}
  if(r.line&&!validateField("line")){toast("Line ID doesn't match the required format");$("f-line").focus();return}
  if(r.rnum&&!validateField("rnum")){toast("Run No. doesn't match the required format");$("f-rnum").focus();return}
  if(r.line&&r.rnum){
-  const dup=arr.find(x=>x.id!==editId&&x.line===r.line&&(x.equip||"")===(r.equip||"")&&(x.rnum||"")===r.rnum);
+  const dup=arr.find(x=>x.id!==editId&&x.line===r.line&&(x.equip||"")===(r.equip||"")&&(x.rnum||"")===r.rnum&&(x.project||"")===(r.project||""));
   if(dup&&!(await askDup(r)))return;
  }
  let oldLine="";
@@ -1650,6 +1679,7 @@ $("pl-rename-go").onclick=async()=>{
 };
 $("pl-mail").onclick=()=>{const l=currentLine,k=pendingKind;emailItems(allItems(l).filter(x=>x.kind===k),lineTitle(l)+" — "+kindLabel(k),$("pl-mail"))};
 $("pl-mailall").onclick=()=>{const l=currentLine;emailItems(allItems(l),lineTitle(l)+" — all photos",$("pl-mailall"))};
+$("pl-proj").onclick=e=>{const b=e.target.closest("button");if(!b)return;photoProj=b.dataset.p;selected.clear();renderPhotoLine(currentLine)};
 $("pl-tech").onclick=e=>{const b=e.target.closest("button");if(!b)return;pendingTech=b.dataset.t;renderTechChips()};
 $("pl-select").onclick=()=>setSelMode(!selMode);
 $("pl-ready").onclick=e=>{
